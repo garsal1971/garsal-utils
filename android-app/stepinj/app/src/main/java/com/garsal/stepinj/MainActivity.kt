@@ -118,7 +118,11 @@ private fun SchermataPassi() {
             .onFailure { scrivi("ERRORE in lettura: ${it.message}") }
     }
 
-    fun esegui(nome: String, azione: suspend () -> EsitoPassi) = conPermessi {
+    // ⚠️ Il tipo di ritorno è scritto a mano e non dedotto: `esegui` **chiama sé
+    // stessa** nel ramo dei permessi revocati, e con un corpo a espressione senza
+    // tipo il compilatore ci gira attorno — «Type checking has run into a
+    // recursive problem». Non è pignoleria: senza, non compila.
+    fun esegui(nome: String, azione: suspend () -> EsitoPassi): Unit = conPermessi {
         when (val esito = azione()) {
             is EsitoPassi.Ok -> {
                 scrivi(esito.messaggio)
