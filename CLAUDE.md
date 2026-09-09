@@ -184,9 +184,11 @@ farebbe scaricare un'altra.
 WebView, Smart Blocker, SOS, Spese in giro). Cambiando la forma della scheda in un
 workflow, va cambiata **in tutti** — ora anche di là.
 
-⚠️ **`Rilascio.SITO` va corretto col nome vero del sito Netlify** di questo repository.
-Puntando a quello di garsal-apps, `StepInj-latest.apk` lì non esiste e il download
-finisce su un 404, che dal telefono si legge come «la connessione non funziona».
+⚠️ **`Rilascio.SITO` è `https://garsal-utils.netlify.app`**, il sito di *questo*
+repository, e ci deve restare: puntando a quello di garsal-apps
+`StepInj-latest.apk` lì non esiste, e il download finirebbe su un 404 che dal
+telefono si legge come «la connessione non funziona». Lo stesso indirizzo sta in
+`health_privacy_policy_url` nel manifest, e vanno cambiati insieme.
 
 ⚠️ **Non aggiungere `material-icons-extended`**: migliaia di icone compilate come
 codice Kotlin che senza minificazione finiscono tutte nel DEX — in garsal-apps da sola

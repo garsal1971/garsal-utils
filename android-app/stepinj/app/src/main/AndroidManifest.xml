@@ -65,7 +65,7 @@
         <!-- Health Connect pretende un indirizzo per l'informativa privacy. -->
         <meta-data
             android:name="health_privacy_policy_url"
-            android:value="https://garsal-utilss.netlify.app/privacy.html" />
+            android:value="https://garsal-utils.netlify.app/privacy.html" />
 
     </application>
 </manifest>

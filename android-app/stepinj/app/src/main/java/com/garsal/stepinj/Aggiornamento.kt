@@ -39,7 +39,7 @@ object Rilascio {
      *  garsal-apps: là `releases/StepInj-latest.apk` non esiste, e il
      *  download finirebbe su un 404 che dal telefono si legge come «la
      *  connessione non funziona». Da correggere appena il sito ha il suo nome. */
-    private const val SITO = "https://garsal-utilss.netlify.app"
+    private const val SITO = "https://garsal-utils.netlify.app"
     private const val BASE = "StepInj-latest"
 
     /** Il `?v=` non serve al server: impedisce al browser di riproporre il
