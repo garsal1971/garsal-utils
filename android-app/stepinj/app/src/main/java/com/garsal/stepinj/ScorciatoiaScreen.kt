@@ -156,7 +156,7 @@ fun ScorciatoiaScreen() {
 
         Text(
             "Questa scheda apre l'app scelta e nient'altro: non fa partire i passi " +
-                "né la posizione finta.",
+                "né la posizione finta. Per farle tutte e tre in fila c'è la scheda ⚡.",
             style = MaterialTheme.typography.bodySmall,
         )
     }

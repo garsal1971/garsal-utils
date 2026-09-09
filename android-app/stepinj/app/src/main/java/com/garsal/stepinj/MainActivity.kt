@@ -60,11 +60,16 @@ class MainActivity : ComponentActivity() {
 }
 
 /**
- * Le due utility dentro la stessa APK: 👟 i passi e 📍 la posizione finta.
+ * Le utility dentro la stessa APK: ⚡ il giro completo, 👟 i passi, 📍 la posizione
+ * finta e 🚀 la scorciatoia a un'app.
  *
- * ⚠️ **Due schede e non un menù a cassetto**: sono due, e un cassetto costa tre
- * tocchi (aprilo, scegli, si chiude) per una scelta che sta in uno. È la stessa
- * ragione per cui `calorie.html` ha una barra di icone invece del ☰.
+ * ⚠️ **Schede e non un menù a cassetto**: sono poche, e un cassetto costa tre tocchi
+ * (aprilo, scegli, si chiude) per una scelta che sta in uno. È la stessa ragione per
+ * cui `calorie.html` ha una barra di icone invece del ☰.
+ *
+ * ⚠️ **⚡ è la prima e l'app ci si apre sempre**: è il gesto che si fa tutti i giorni,
+ * mentre le altre tre configurano e si aprono quando c'è qualcosa da cambiare. Lo stato
+ * è un `remember` dell'Activity, quindi a ogni apertura si riparte da lì.
  */
 @Composable
 private fun Contenitore() {
@@ -81,7 +86,7 @@ private fun Contenitore() {
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            listOf("👟 Passi", "📍 MockGps", "🚀 Apri").forEachIndexed { i, nome ->
+            listOf("⚡ Vai", "👟 Passi", "📍 MockGps", "🚀 Apri").forEachIndexed { i, nome ->
                 if (i == scheda) {
                     Button(onClick = { scheda = i }) { Text(nome) }
                 } else {
@@ -91,8 +96,9 @@ private fun Contenitore() {
         }
 
         when (scheda) {
-            0 -> SchermataPassi()
-            1 -> MockGpsScreen()
+            0 -> RapidoScreen()
+            1 -> SchermataPassi()
+            2 -> MockGpsScreen()
             else -> ScorciatoiaScreen()
         }
     }
@@ -106,7 +112,15 @@ internal fun SchermataPassi() {
     val scope = rememberCoroutineScope()
 
     var passiOggi by remember { mutableStateOf<Long?>(null) }
-    var quanti by remember { mutableStateOf("") }
+    // ⚠️ La casella parte dall'**ultimo numero scritto davvero**, non vuota: è quasi
+    // sempre lo stesso, e riscriverlo ogni volta era il gesto più ripetuto dell'app.
+    // Il valore sta nelle preferenze (`PassiRepository.ultimoNumero`) e non in un
+    // `remember`: dev'essere lo stesso alla riapertura dell'app, ed è lo stesso che usa
+    // il pulsantone ⚡ — due default diversi per la stessa domanda sarebbero due numeri
+    // che divergono senza che si veda quale ha vinto.
+    var quanti by remember {
+        mutableStateOf(PassiRepository.ultimoNumero(context).takeIf { it > 0 }?.toString().orEmpty())
+    }
     var occupato by remember { mutableStateOf(false) }
     val log = remember { mutableListOf<String>().toMutableStateList() }
 
@@ -234,7 +248,10 @@ internal fun SchermataPassi() {
                     onClick = {
                         val n = quanti.toLongOrNull() ?: 0L
                         esegui("scrittura") { PassiRepository.aggiungi(context, n) }
-                        quanti = ""
+                        // ⚠️ La casella NON si svuota: quel numero è il default della
+                        // prossima volta, e azzerarla direbbe il contrario proprio nel
+                        // punto in cui lo si è appena confermato. Per ricominciare da
+                        // capo c'è il ↺ qui sopra.
                     },
                     enabled = !occupato && (quanti.toLongOrNull() ?: 0L) > 0,
                     modifier = Modifier.fillMaxWidth(),

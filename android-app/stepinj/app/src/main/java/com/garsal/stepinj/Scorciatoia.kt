@@ -11,6 +11,12 @@ import kotlinx.coroutines.withContext
  * ⚠️ **Apre e basta, e non è una limitazione da togliere.** Non fa partire
  * niente prima né dopo: è un collegamento, non una sequenza. Attaccarci davanti
  * altre azioni la trasformerebbe in un'altra cosa.
+ *
+ * ⚠️ La sequenza esiste — mock, passi, apri — ma vive nella **scheda ⚡**
+ * (`RapidoScreen`), che riusa `apri()` come terzo passo. Sono due gesti diversi e
+ * restano due pulsanti diversi: chi vuole solo aprire l'app non deve trovarsi i passi
+ * scritti e il mock acceso, e chi vuole il giro intero non deve fare tre tocchi in tre
+ * schede. Quel che NON si fa è attaccare le altre due azioni a questo pulsante.
  */
 
 /** Un'app che si può aprire: il pacchetto è l'identità, il nome è quel che si legge. */

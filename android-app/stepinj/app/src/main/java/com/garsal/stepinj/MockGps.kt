@@ -44,6 +44,16 @@ object MockGps {
 
     private const val PREFS = "stepinj"
     private const val CHIAVE_PUNTI = "mock_punti"
+    private const val CHIAVE_SECONDI = "mock_secondi"
+    private const val CHIAVE_MINUTI = "mock_minuti"
+    private const val CHIAVE_SCELTI = "mock_scelti"
+
+    /** Quanto dura un giro se nessuno l'ha ancora deciso. */
+    const val SECONDI_DI_PARTENZA = 5
+    const val MINUTI_DI_PARTENZA = 5
+
+    /** I due tempi di un giro: quanto si sta su una coordinata, e quanto dura in tutto. */
+    data class Tempi(val secondi: Int, val minuti: Int)
 
     /**
      * I tre provider che si fingono.
@@ -79,6 +89,66 @@ object MockGps {
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putString(CHIAVE_PUNTI, punti.joinToString("\n") { it.chiave() })
             .apply()
+    }
+
+    /**
+     * I due tempi e le coordinate spuntate, che stanno nelle preferenze **come
+     * l'elenco** e non nella sola schermata.
+     *
+     * ⚠️ Fino alla v1.2.0 vivevano in un `remember` della schermata: si perdevano
+     * chiudendo l'app, e ogni giro ripartiva da 5 e 5 senza che niente lo dicesse. È il
+     * pulsantone ⚡ a renderlo un difetto vero — lui la schermata non la apre affatto,
+     * quindi senza queste preferenze userebbe dei tempi che l'utente non ha mai scelto.
+     */
+    fun leggiTempi(ctx: Context): Tempi {
+        val p = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        return Tempi(
+            p.getInt(CHIAVE_SECONDI, SECONDI_DI_PARTENZA).coerceAtLeast(1),
+            p.getInt(CHIAVE_MINUTI, MINUTI_DI_PARTENZA).coerceAtLeast(1),
+        )
+    }
+
+    fun salvaTempi(ctx: Context, secondi: Int, minuti: Int) {
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putInt(CHIAVE_SECONDI, secondi.coerceAtLeast(1))
+            .putInt(CHIAVE_MINUTI, minuti.coerceAtLeast(1))
+            .apply()
+    }
+
+    /**
+     * Le chiavi spuntate. ⚠️ **Vuoto vuol dire «tutte»**, ed è la stessa regola della
+     * schermata: è il caso più frequente e non merita una spunta per riga. Le chiavi si
+     * rileggono filtrate su quelle che esistono ancora — una coordinata cancellata
+     * lascerebbe altrimenti una spunta che non si vede e che restringe il giro.
+     */
+    fun leggiScelti(ctx: Context): Set<String> =
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString(CHIAVE_SCELTI, "")
+            .orEmpty()
+            .lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .toSet()
+
+    fun salvaScelti(ctx: Context, chiavi: Collection<String>) {
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString(CHIAVE_SCELTI, chiavi.joinToString("\n"))
+            .apply()
+    }
+
+    /**
+     * Le coordinate che un giro userebbe adesso: le spuntate, o tutte se non ce n'è
+     * nessuna.
+     *
+     * ⚠️ Sta qui e non nelle due schermate: la regola «nessuna spunta = tutte» scritta
+     * due volte sono due giri diversi il giorno che una delle due cambia — e il
+     * pulsantone ⚡ userebbe coordinate diverse da quelle che la scheda 📍 dichiara.
+     */
+    fun daUsare(ctx: Context): List<Punto> {
+        val punti = leggiPunti(ctx)
+        val scelti = leggiScelti(ctx)
+        val filtrati = punti.filter { scelti.contains(it.chiave()) }
+        return if (filtrati.isEmpty()) punti else filtrati
     }
 
     /**
