@@ -46,10 +46,18 @@ fun MockGpsScreen() {
     val ctx = LocalContext.current
 
     val punti = remember { mutableStateListOf<Punto>().apply { addAll(MockGps.leggiPunti(ctx)) } }
-    val scelti = remember { mutableStateListOf<String>() }
+    // ⚠️ Spunte e tempi si RILEGGONO dalle preferenze e non ripartono da zero: sono
+    // quello che userà anche il pulsantone ⚡, che questa schermata non la apre affatto.
+    // Le chiavi si filtrano su quelle che esistono ancora — una coordinata cancellata
+    // lascerebbe una spunta invisibile che restringe il giro senza dirlo.
+    val scelti = remember {
+        val vive = punti.map { it.chiave() }.toSet()
+        mutableStateListOf<String>().apply { addAll(MockGps.leggiScelti(ctx).filter { it in vive }) }
+    }
     var daAggiungere by remember { mutableStateOf("") }
-    var secondi by remember { mutableStateOf("5") }
-    var minuti by remember { mutableStateOf("5") }
+    val tempi = remember { MockGps.leggiTempi(ctx) }
+    var secondi by remember { mutableStateOf(tempi.secondi.toString()) }
+    var minuti by remember { mutableStateOf(tempi.minuti.toString()) }
     var avviso by remember { mutableStateOf("") }
 
     val attivo by MockStato.attivo.collectAsState()
@@ -58,6 +66,12 @@ fun MockGpsScreen() {
     val messaggio by MockStato.messaggio.collectAsState()
 
     fun salva() = MockGps.salvaPunti(ctx, punti.toList())
+    fun salvaScelte() = MockGps.salvaScelti(ctx, scelti.toList())
+    fun salvaTempi() = MockGps.salvaTempi(
+        ctx,
+        secondi.toIntOrNull() ?: MockGps.SECONDI_DI_PARTENZA,
+        minuti.toIntOrNull() ?: MockGps.MINUTI_DI_PARTENZA,
+    )
 
     // Il permesso delle notifiche serve alla notifica del servizio in primo
     // piano. ⚠️ Negato, il mock parte lo stesso — ma senza notifica sparisce il
@@ -131,6 +145,7 @@ fun MockGpsScreen() {
                             checked = scelti.contains(p.chiave()),
                             onCheckedChange = { su ->
                                 if (su) scelti.add(p.chiave()) else scelti.remove(p.chiave())
+                                salvaScelte()
                             },
                         )
                         Text(p.testo(), fontFamily = FontFamily.Monospace, fontSize = 15.sp)
@@ -146,6 +161,7 @@ fun MockGpsScreen() {
                     OutlinedButton(onClick = {
                         if (scelti.size == punti.size) scelti.clear()
                         else { scelti.clear(); punti.forEach { scelti.add(it.chiave()) } }
+                        salvaScelte()
                     }) { Text(if (scelti.size == punti.size) "Nessuno" else "Tutti") }
 
                     OutlinedButton(
@@ -163,6 +179,7 @@ fun MockGpsScreen() {
                             punti.removeAll { scelti.contains(it.chiave()) }
                             scelti.clear()
                             salva()
+                            salvaScelte()
                         },
                     ) { Text("🗑 Cancella") }
                 }
@@ -241,7 +258,7 @@ fun MockGpsScreen() {
         Riquadro("TEMPI") {
             OutlinedTextField(
                 value = secondi,
-                onValueChange = { secondi = it.filter { c -> c.isDigit() }.take(4) },
+                onValueChange = { secondi = it.filter { c -> c.isDigit() }.take(4); salvaTempi() },
                 label = { Text("Secondi su ogni coordinata") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -249,14 +266,15 @@ fun MockGpsScreen() {
             )
             OutlinedTextField(
                 value = minuti,
-                onValueChange = { minuti = it.filter { c -> c.isDigit() }.take(4) },
+                onValueChange = { minuti = it.filter { c -> c.isDigit() }.take(4); salvaTempi() },
                 label = { Text("Durata totale (minuti)") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth(),
             )
             Text(
-                "L'elenco si ripete in giro finché i minuti non finiscono.",
+                "L'elenco si ripete in giro finché i minuti non finiscono. Questi due tempi " +
+                    "restano scritti: li riusa anche il pulsantone della scheda ⚡.",
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
@@ -275,12 +293,14 @@ fun MockGpsScreen() {
                             != PackageManager.PERMISSION_GRANTED) {
                             chiediNotifiche.launch(Manifest.permission.POST_NOTIFICATIONS)
                         }
-                        val daUsare = if (scelti.isEmpty()) punti.toList()
-                                      else punti.filter { scelti.contains(it.chiave()) }
+                        // ⚠️ Le coordinate le sceglie `MockGps.daUsare`, non questa
+                        // riga: la regola «nessuna spunta = tutte» scritta anche qui
+                        // sarebbero due giri diversi il giorno che una delle due cambia,
+                        // e il pulsantone ⚡ ne userebbe di sue.
                         MockGpsService.avvia(
-                            ctx, daUsare,
-                            secondi.toIntOrNull() ?: 5,
-                            minuti.toIntOrNull() ?: 5,
+                            ctx, MockGps.daUsare(ctx),
+                            secondi.toIntOrNull() ?: MockGps.SECONDI_DI_PARTENZA,
+                            minuti.toIntOrNull() ?: MockGps.MINUTI_DI_PARTENZA,
                         )
                     }
                 }

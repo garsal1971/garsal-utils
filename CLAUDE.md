@@ -14,7 +14,8 @@ fa. Il giorno che le utility saranno due, la seconda avrà il suo nome allo stes
 **garsal-utils** è il contenitore delle utility di Salvatore: pagine web servite da
 Netlify, eventuali Edge Function Supabase, e un'APK Android — **StepInj**, che fa
 tre cose: 👟 correggere i passi della giornata in Health Connect, 📍 fingere la
-posizione GPS e 🚀 aprire un'app scelta. La lingua dell'interfaccia
+posizione GPS e 🚀 aprire un'app scelta — più la scheda ⚡, che le fa **tutt'e tre in
+fila con un tocco** ed è quella su cui l'app si apre. La lingua dell'interfaccia
 è l'italiano, come in garsal-apps.
 
 ⚠️ **Non è garsal-apps e non è la suite AppSphere.** Non ha una riga in `cm_apps`,
@@ -40,6 +41,7 @@ garsal-utils/
 ├── comandi.html                # la guida: download dell'APK, i secret, Netlify
 ├── privacy.html                # informativa — Health Connect pretende che esista
 ├── android-app/stepinj/        # l'APK StepInj: progetto Gradle standalone, Compose
+│                               #   ⚡ Vai · 👟 Passi · 📍 MockGps · 🚀 Apri
 └── .github/workflows/
     ├── deploy.yml              # claude/** → main (+ Supabase, se configurato)
     ├── deploy-dev.yml          # dev/** → preview Netlify
@@ -210,11 +212,71 @@ avvisa oltre i 25 MB, così non può succedere in silenzio.
 
 ---
 
-## 👟 Passi — l'unica cosa che l'APK fa oggi
+## ⚡ Vai — le tre cose in fila, con un tocco
+
+La **prima scheda**, e quella su cui l'app si apre sempre. Un pulsantone solo, che fa
+nell'ordine: **1** accende la posizione finta, **2** aggiunge i passi, **3** apre l'app
+scelta. Vive in `RapidoScreen.kt`.
+
+⚠️ **Non configura niente, di proposito.** Quanti passi, quali coordinate, per quanti
+minuti e quale app sono **l'ultima cosa scelta nelle altre tre schede**: qui non c'è una
+seconda casella dove riscriverli, o sarebbero due verità sullo stesso numero e non si
+saprebbe quale ha usato il giro. È la stessa scelta per cui in 📍 MockGps le coordinate
+spuntate *sono* quelle che si useranno, senza un pulsante «Usa».
+
+⚠️ **Un passo fallito non ferma gli altri.** Le tre cose sono indipendenti — il mock non
+autorizzato non è una ragione per non scrivere i passi — e soprattutto fermarsi al primo
+intoppo vorrebbe dire ripremere il pulsante e rifare da capo anche quel che era già
+riuscito, cioè **scrivere i passi due volte**. Alla fine la schermata elenca com'è andato
+ciascuno, ✅ o ⚠️.
+
+⚠️ **Si aspetta che il mock sia davvero partito prima di aprire l'app**
+(`ATTESA_MOCK_MS`, 3 s). `startForegroundService` torna **subito**, mentre i provider
+finti li registra il servizio un istante dopo: l'app aperta in quell'istante legge la
+posizione **vera** — cioè il mock sembrerebbe non aver funzionato proprio nel giro in cui
+serviva, e senza niente che lo spieghi. Se allo scadere non è partito, l'esito riporta il
+motivo che il **servizio** ha scritto in `MockStato.messaggio`, non una frase nostra.
+
+⚠️ **L'app si apre per ultima**, e non è un ordine qualunque: aprirla manda StepInj in
+secondo piano, e quel che venisse dopo lo farebbe un'app che non è più a schermo.
+
+⚠️ **Un mock già in corso si lascia com'è**: fermarlo e rifarlo partire azzererebbe il
+countdown di un giro che sta lavorando, senza che nessuno l'abbia chiesto.
+
+### ⚠️ I permessi si chiedono TUTTI prima, e ogni risposta riprende dal passo dopo
+
+Il giro ha bisogno di tre permessi che possono mancare: posizione (serve al servizio in
+primo piano, vedi 📍 MockGps), notifiche, e quelli di Health Connect. Si chiedono **in
+fila davanti alla sequenza** e mai a metà: una finestra di sistema aperta durante il giro
+può ricreare l'Activity, e la sequenza si fermerebbe lì — **mock acceso e passi mai
+scritti**, senza niente a schermo che lo dica.
+
+⚠️ Ogni risposta riprende dal passo **successivo** e mai da capo: ripartendo da `vai()`,
+un permesso concesso rilancerebbe una sequenza già eseguita — cioè i passi scritti due
+volte. Per la stessa ragione i tre gradini sono `vai()` → `passoPassi()` → `sequenza()`
+senza nessuna ricorsione, e i launcher si dichiarano in ordine **inverso** rispetto a
+come si usano: in Kotlin una funzione locale si chiama solo dopo essere stata scritta.
+
+---
+
+## 👟 Passi
 
 Correggere i passi della giornata **aggiungendone**, scritti in **Health Connect**.
-Vive in `Passi.kt` (il ponte con Health Connect) e `MainActivity.kt` (le tre schede:
+Vive in `Passi.kt` (il ponte con Health Connect) e `MainActivity.kt` (i tre riquadri:
 leggi, aggiungi, disfa).
+
+⚠️ **La casella parte dall'ultimo numero scritto davvero** (preferenza `ultimi_passi`,
+`PassiRepository.ultimoNumero`), non vuota: è quasi sempre lo stesso numero, e
+riscriverlo ogni volta era il gesto più ripetuto dell'app. Lo scrive `aggiungi()` **dopo
+che l'inserimento è riuscito** e non la casella mentre la si digita — il valore di
+partenza dev'essere l'ultimo numero *usato*, non l'ultimo abbozzato e poi cancellato. Per
+la stessa ragione la casella **non si svuota** dopo l'aggiunta: azzerarla direbbe il
+contrario proprio nel punto in cui quel numero si è appena confermato; per ricominciare
+da capo c'è il ↺.
+
+⚠️ **La preferenza è una sola per tutta l'app**: la leggono la scheda 👟 e il pulsantone
+⚡. Due preferenze sarebbero due default diversi per la stessa domanda, col pulsantone che
+scrive un numero che nella casella non si legge da nessuna parte.
 
 ### ⚠️ Health Connect e NON Google Fit, ed è tutto il punto
 
@@ -344,6 +406,17 @@ il pulsante che apre quella pagina di impostazioni.
   riesce a incollare proprio dal telefono su cui gira l'app.
 - **L'elenco sta nelle preferenze del telefono**, non su Supabase: l'app si deve aprire e
   funzionare senza rete, che è il caso in cui un mock serve davvero.
+- ⚠️ **Anche i due tempi e le coordinate spuntate stanno lì** (`mock_secondi`,
+  `mock_minuti`, `mock_scelti`), dalla v1.3.0. Fino alla v1.2.0 vivevano in un `remember`
+  della schermata: si perdevano chiudendo l'app e ogni giro ripartiva da 5 e 5 senza che
+  niente lo dicesse. È il pulsantone ⚡ a renderlo un difetto vero — lui la schermata non
+  la apre affatto, quindi senza quelle preferenze userebbe tempi che nessuno ha scelto.
+  Le chiavi spuntate si rileggono **filtrate su quelle che esistono ancora**: una
+  coordinata cancellata lascerebbe una spunta invisibile che restringe il giro.
+- ⚠️ **La regola «nessuna spunta = tutte» vive in `MockGps.daUsare()`, un posto solo**, e
+  la chiamano tutt'e due i pulsanti: scritta anche nella schermata sarebbero due giri
+  diversi il giorno che una delle due cambia, col pulsantone ⚡ che usa coordinate diverse
+  da quelle che la scheda 📍 dichiara.
 
 ---
 
@@ -356,6 +429,11 @@ pulsante la apre. Vive in `Scorciatoia.kt` e `ScorciatoiaScreen.kt`.
 né dopo — non i passi, non la posizione finta: è un collegamento, non una sequenza.
 Attaccarci davanti altre azioni la trasformerebbe in un'altra cosa, e la schermata lo
 scrive in fondo perché sia chiaro anche a chi la apre fra un anno.
+
+⚠️ **La sequenza esiste, ma è la scheda ⚡** (v1.3.0), che riusa `Scorciatoia.apri()`
+come terzo passo. Sono due gesti diversi e restano due pulsanti diversi: chi vuole solo
+aprire l'app non deve trovarsi i passi scritti e il mock acceso, e chi vuole il giro
+intero non deve fare tre tocchi in tre schede.
 
 - ⚠️ **Il `<queries>` nel manifest è la ragione per cui l'elenco non è vuoto.** Da
   Android 11 un'app non vede i pacchetti installati se non dichiara cosa cerca, e senza

@@ -59,6 +59,21 @@ object PassiRepository {
     /** Il nome della preferenza dove sta la fine dell'ultima riga scritta. */
     private const val PREFS = "stepinj"
     private const val ULTIMO_FINE = "ultimo_fine_passi"
+    private const val ULTIMI_PASSI = "ultimi_passi"
+
+    /**
+     * L'ultimo numero di passi **scritto davvero**, o 0 se non è mai successo.
+     *
+     * ⚠️ Lo scrive `aggiungi()` dopo che l'inserimento è riuscito, e **non** la casella
+     * mentre la si digita: il valore di partenza dev'essere l'ultimo numero *usato*,
+     * non l'ultimo abbozzato e poi cancellato.
+     *
+     * ⚠️ È **uno solo per tutta l'app**: lo leggono la scheda 👟 e il pulsantone ⚡, e
+     * due preferenze diverse sarebbero due default diversi per la stessa domanda — con
+     * il pulsantone che scrive un numero che nella casella non si legge da nessuna parte.
+     */
+    fun ultimoNumero(context: Context): Long =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getLong(ULTIMI_PASSI, 0L)
 
     /** Cosa risponde Health Connect, e cosa può farci l'utente. */
     fun statoSdk(context: Context): String? = runCatching {
@@ -158,7 +173,10 @@ object PassiRepository {
                     )
                 )
             )
-            prefs.edit().putLong(ULTIMO_FINE, fine.toEpochMilli()).apply()
+            prefs.edit()
+                .putLong(ULTIMO_FINE, fine.toEpochMilli())
+                .putLong(ULTIMI_PASSI, quanti)
+                .apply()
             EsitoPassi.Ok("Aggiunti ${"%,d".format(quanti)} passi.")
         } catch (e: SecurityException) {
             EsitoPassi.PermessiRichiesti
