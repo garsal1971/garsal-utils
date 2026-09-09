@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -9,6 +10,26 @@
          per cui questa app esiste (vedi Passi.kt). -->
     <uses-permission android:name="android.permission.health.READ_STEPS" />
     <uses-permission android:name="android.permission.health.WRITE_STEPS" />
+
+    <!-- ── 📍 MockGps ────────────────────────────────────────────────────────
+         ⚠️ ACCESS_MOCK_LOCATION NON dà il permesso di fingere la posizione: è
+         una dichiarazione, e il controllo vero è un'altra cosa — l'utente deve
+         scegliere questa app in Opzioni sviluppatore → «App per posizioni
+         fittizie». Senza quella scelta `addTestProvider` risponde con una
+         SecurityException, ed è il caso che la schermata riconosce e spiega.
+         ⚠️ `tools:ignore` perché il lint la segnala come permesso da sola app
+         di test: qui è esattamente quel che l'app fa, di proposito. -->
+    <uses-permission android:name="android.permission.ACCESS_MOCK_LOCATION"
+        tools:ignore="MockLocation" />
+    <!-- Serve al solo «Leggi posizione GPS», per riempire l'elenco con dove sei. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- Il giro del mock vive in un servizio in primo piano: serve mentre si usa
+         un'ALTRA app, quindi la schermata è per definizione in secondo piano. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <!-- La notifica del servizio, da Android 13 in poi. Negata, il mock parte
+         lo stesso — ma sparisce il tasto Ferma da fuori dall'app. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Serve a RILEVARE Health Connect: senza, `getSdkStatus` risponde
          «non disponibile» anche dov'è installato, perché da Android 11 un'app
@@ -61,6 +82,11 @@
                 <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
             </intent-filter>
         </activity-alias>
+
+        <service
+            android:name=".MockGpsService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
 
         <!-- Health Connect pretende un indirizzo per l'informativa privacy. -->
         <meta-data

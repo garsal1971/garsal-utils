@@ -42,9 +42,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.health.connect.client.PermissionController
-import kotlinx.coroutines.launch
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.launch
 
 private val BluBarra = Color(0xFF0081C8)
 
@@ -53,18 +53,57 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             MaterialTheme(colorScheme = lightColorScheme()) {
-                Surface(Modifier.fillMaxSize()) { SchermataPassi() }
+                Surface(Modifier.fillMaxSize()) { Contenitore() }
             }
         }
     }
 }
 
+/**
+ * Le due utility dentro la stessa APK: 👟 i passi e 📍 la posizione finta.
+ *
+ * ⚠️ **Due schede e non un menù a cassetto**: sono due, e un cassetto costa tre
+ * tocchi (aprilo, scegli, si chiude) per una scelta che sta in uno. È la stessa
+ * ragione per cui `calorie.html` ha una barra di icone invece del ☰.
+ */
 @Composable
-private fun SchermataPassi() {
+private fun Contenitore() {
+    var scheda by remember { mutableStateOf(0) }
+    var mostraVersione by remember { mutableStateOf(false) }
+
+    Column(Modifier.fillMaxSize()) {
+        BarraAlta(onVersione = { mostraVersione = true })
+
+        // ⚠️ La riga delle schede SCORRE e non si stringe: coi caratteri di
+        // sistema grandi due etichette larghe su 360 px non ci stanno, e
+        // schiacciarle sotto il polpastrello le renderebbe non toccabili.
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            listOf("👟 Passi", "📍 MockGps").forEachIndexed { i, nome ->
+                if (i == scheda) {
+                    Button(onClick = { scheda = i }) { Text(nome) }
+                } else {
+                    OutlinedButton(onClick = { scheda = i }) { Text(nome) }
+                }
+            }
+        }
+
+        when (scheda) {
+            0 -> SchermataPassi()
+            else -> MockGpsScreen()
+        }
+    }
+
+    if (mostraVersione) DialogoAggiornamento(onChiudi = { mostraVersione = false })
+}
+
+@Composable
+internal fun SchermataPassi() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    var mostraVersione by remember { mutableStateOf(false) }
     var passiOggi by remember { mutableStateOf<Long?>(null) }
     var quanti by remember { mutableStateOf("") }
     var occupato by remember { mutableStateOf(false) }
@@ -139,8 +178,6 @@ private fun SchermataPassi() {
     }
 
     Column(Modifier.fillMaxSize()) {
-        BarraAlta(onVersione = { mostraVersione = true })
-
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -231,11 +268,10 @@ private fun SchermataPassi() {
         }
     }
 
-    if (mostraVersione) DialogoAggiornamento(onChiudi = { mostraVersione = false })
 }
 
 @Composable
-private fun Riquadro(titolo: String, contenuto: @Composable () -> Unit) {
+internal fun Riquadro(titolo: String, contenuto: @Composable () -> Unit) {
     Card(Modifier.fillMaxWidth()) {
         Column(
             Modifier.padding(16.dp),

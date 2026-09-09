@@ -12,8 +12,9 @@ perché è lei che si cerca nel cassetto delle app, e «Garsal Utils» lì non d
 fa. Il giorno che le utility saranno due, la seconda avrà il suo nome allo stesso modo.
 
 **garsal-utils** è il contenitore delle utility di Salvatore: pagine web servite da
-Netlify, eventuali Edge Function Supabase, e un'APK Android — che oggi fa una cosa
-sola, 👟 correggere i passi della giornata in Health Connect. La lingua dell'interfaccia
+Netlify, eventuali Edge Function Supabase, e un'APK Android — **StepInj**, che fa
+due cose: 👟 correggere i passi della giornata in Health Connect e 📍 fingere la
+posizione GPS. La lingua dell'interfaccia
 è l'italiano, come in garsal-apps.
 
 ⚠️ **Non è garsal-apps e non è la suite AppSphere.** Non ha una riga in `cm_apps`,
@@ -265,6 +266,74 @@ passaggio, e non è una cosa che il codice possa garantire.
   dove è installato.
 - ⚠️ **`health_privacy_policy_url` punta a `privacy.html` di questo repo**, che deve
   esistere davvero: Health Connect quell'indirizzo lo pretende.
+
+---
+
+## 📍 MockGps — la posizione finta
+
+Un elenco di coordinate, quanti secondi stare su ciascuna e per quanti minuti in tutto:
+il telefono dice di essere lì, ciclando sull'elenco finché i minuti non finiscono. Vive
+in `MockGps.kt` (il motore), `MockGpsService.kt` (il giro) e `MockGpsScreen.kt` (la
+schermata).
+
+⚠️ **Sta nella stessa APK dei passi**, come seconda scheda, ed è una scelta dichiarata:
+un'APK sola da installare e aggiornare, al prezzo che StepInj chiede anche i permessi
+di posizione e che il nome nel cassetto parla di una delle due cose soltanto.
+
+### ⚠️ Il permesso vero non è nel manifest
+
+`ACCESS_MOCK_LOCATION` è una **dichiarazione**, non un'autorizzazione: Android accetta
+posizioni finte solo dall'app che l'utente ha scelto in *Opzioni sviluppatore → App per
+posizioni fittizie*, e a chiunque altro `addTestProvider` risponde con una
+`SecurityException`. Per questo `MockGps.perche()` **prova** ad accendere e spegnere
+prima di partire, e quel caso lo riconosce per nome: senza, il mock fallirebbe con un
+errore generico e l'app sembrerebbe rotta invece che non autorizzata. La schermata porta
+il pulsante che apre quella pagina di impostazioni.
+
+### Le cose che sono la funzionalità
+
+- ⚠️ **Non basta mockare il GPS.** Le app moderne non leggono `GPS_PROVIDER`: chiedono
+  la posizione al *fused provider*, che mescola GPS, rete e sensori. Col solo GPS il
+  telefono resterebbe dov'è davvero, e sembrerebbe che il mock non funzioni mentre sta
+  funzionando su un provider che nessuno guarda. Si fingono tutt'e tre —
+  `gps`, `network`, `fused` — **uno per volta e in `runCatching`**, perché su alcuni
+  telefoni `fused` non si lascia mockare e fermarsi al primo rifiuto vorrebbe dire
+  niente mock nemmeno dove il GPS ci stava.
+- ⚠️ **La posizione si riscrive ogni secondo, non ogni `secondiPerCoord`.** Una
+  posizione finta invecchia: le app la scartano dopo qualche secondo e il sistema
+  rimette in giro quella vera, quindi il mock «terrebbe» a scatti. Il passo in secondi
+  decide **quando si cambia punto**, non ogni quanto lo si dice.
+- ⚠️ **`elapsedRealtimeNanos` non è facoltativo**: dall'API 17 `setTestProviderLocation`
+  rifiuta una posizione che non ce l'ha, con una `IllegalArgumentException` che non
+  nomina il campo mancante. È il primo posto da guardare se il mock smette di funzionare.
+- ⚠️ **Il giro vive in un servizio in primo piano**, non nella schermata: un mock serve
+  mentre si usa **un'altra app**, quindi la schermata è per definizione in secondo piano
+  — e da lì Android ferma le coroutine quando gli pare. È la stessa ragione per cui in
+  SOS il countdown sta nel servizio.
+- ⚠️ **Il provider finto va TOLTO e non solo spento** (`removeTestProvider`), e si toglie
+  anche in `onDestroy`: lasciandolo registrato il telefono continua a rispondere con
+  l'ultima posizione falsa anche ad app aperte dopo — un mock che non si vede più da
+  nessuna parte e che nessuno sa come fermare.
+- ⚠️ **Il tasto Ferma sta anche sulla notifica**: un mock che si spegne solo riaprendo
+  l'app è un mock che resta acceso quando ci si dimentica di lui.
+
+### Le scelte dell'interfaccia
+
+- ⚠️ **Non c'è il pulsante «Usa»** che c'era in SilentMockGPS: le coordinate spuntate
+  *sono* quelle che si useranno, e un pulsante che lo confermasse sarebbe una seconda
+  verità sulla stessa cosa — il giorno che divergono non si saprebbe quale ha usato il
+  giro. **Nessuna spunta = si usano tutte**, che è il caso più frequente e non merita
+  una spunta per riga.
+- ⚠️ **«Leggi posizione GPS» si rifiuta a mock acceso**: il telefono risponderebbe con
+  la posizione **finta**, e salvarla come «dove sono» riempirebbe l'elenco di coordinate
+  inventate.
+- ⚠️ **Una riga illeggibile torna `null`, non un punto a (0,0)**: lo zero è un posto vero
+  — nel golfo di Guinea — e un errore di battitura non deve diventare una coordinata
+  plausibile. Si accetta anche la **virgola decimale** (`44,5072 11,3621`), riconosciuta
+  dal contarne due senza nessun punto: rifiutarla vorrebbe dire un elenco che non si
+  riesce a incollare proprio dal telefono su cui gira l'app.
+- **L'elenco sta nelle preferenze del telefono**, non su Supabase: l'app si deve aprire e
+  funzionare senza rete, che è il caso in cui un mock serve davvero.
 
 ---
 
