@@ -1,0 +1,76 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+    id 'org.jetbrains.kotlin.plugin.compose'
+}
+
+android {
+    namespace 'com.garsal.stepinj'
+    compileSdk 36
+
+    defaultConfig {
+        // ⚠️ L'applicationId non si cambia più dopo la prima installazione: cambiarlo
+        // farebbe di questo APK **un'app diversa**, che si installerebbe accanto alla
+        // vecchia invece di aggiornarla, lasciando indietro dati e permessi.
+        applicationId "com.garsal.stepinj"
+        minSdk 26
+        targetSdk 36
+        versionCode 1
+        versionName "1.0.0"
+    }
+
+    // Le pagine HTML scelgono fra dev e produzione dall'hostname (_IS_DEV); qui un
+    // hostname non c'è, quindi la scelta la fa il build type e nel codice non compare
+    // nessun if sull'ambiente — si legge BuildConfig e basta.
+    buildTypes {
+        debug {
+            buildConfigField "String", "SUPABASE_URL", '"https://hcmmywitrbmcsmytjbaf.supabase.co"'
+        }
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            buildConfigField "String", "SUPABASE_URL", '"https://jajlmmdsjlvzgcxiiypk.supabase.co"'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
+    buildFeatures {
+        compose true
+        buildConfig true
+    }
+
+    packaging {
+        resources {
+            excludes += ['/META-INF/{AL2.0,LGPL2.1}']
+        }
+    }
+}
+
+dependencies {
+    implementation platform('androidx.compose:compose-bom:2025.04.01')
+    implementation 'androidx.compose.ui:ui'
+    implementation 'androidx.compose.ui:ui-graphics'
+    implementation 'androidx.compose.material3:material3'
+    // ⚠️ NON aggiungere `material-icons-extended`: migliaia di icone compilate come
+    // codice Kotlin, che senza minificazione finiscono tutte nel DEX — in
+    // appsphere-native da sola aveva portato l'APK da 10 a 51 MB. Le icone qui sono
+    // emoji dentro del testo e quelle di material-icons-core, che arriva con material3.
+    implementation 'androidx.activity:activity-compose:1.10.1'
+    implementation 'androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7'
+    implementation 'androidx.lifecycle:lifecycle-runtime-compose:2.8.7'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.1'
+
+    // Health Connect — leggere e scrivere i passi. ⚠️ Stessa versione degli APK di
+    // garsal-apps: in quella riga di versione il costruttore `Metadata` non esiste
+    // più e si passa da `Metadata.manualEntry()`, quindi cambiarla senza guardare
+    // Passi.kt rompe la scrittura.
+    implementation 'androidx.health.connect:connect-client:1.1.0-rc01'
+}

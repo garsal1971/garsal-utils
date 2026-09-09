@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Garsal Utils v1.0.0</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Darker+Grotesque:wght@400;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+    --primary: #FF3366;
+    --secondary: #6C5CE7;
+    --success: #00B894;
+    --warning: #F39C12;
+    --danger: #E74C3C;
+    --dark: #1F2937;
+    --light: #FFFFFF;
+    --muted: #6B7280;
+    --accent: #2563EB;
+    --border: #E5E7EB;
+    --card-bg: #FFFFFF;
+    --input-bg: #F9FAFB;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+    font-family: 'Darker Grotesque', system-ui, sans-serif;
+    background: #F3F4F6;
+    color: var(--dark);
+    overflow-x: hidden;
+    padding-top: 56px;
+    /* Coi caratteri di sistema grandi una parola sola può essere più larga del
+       riquadro: spezzarla è meglio che tagliarla, e a carattere normale non
+       cambia niente. */
+    overflow-wrap: anywhere;
+}
+
+/* ── TOP BAR ── */
+#garsal-top-bar {
+    position: fixed; top: 0; left: 0; right: 0;
+    /* ⚠️ min-height e non height: coi caratteri di sistema grandi la scritta è
+       più alta del contenitore e quel che avanza sparisce. */
+    min-height: 56px;
+    background: #0081C8;
+    display: flex; align-items: center; padding: 0 20px; gap: 10px;
+    z-index: 3000;
+}
+#garsal-top-bar-text {
+    font-family: 'Darker Grotesque', sans-serif;
+    font-size: 15px; font-weight: 700; color: #fff; letter-spacing: 0.2px;
+}
+.topbar-spacer { flex: 1; }
+.header-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.app-version {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.62rem;
+    color: rgba(255,255,255,0.85);
+    background: rgba(0,0,0,0.18);
+    padding: 4px 9px;
+    border-radius: 99px;
+}
+.btn-icon {
+    background: rgba(255,255,255,0.18);
+    border: none; color: #fff; cursor: pointer;
+    min-width: 34px; min-height: 34px;
+    border-radius: 10px; font-size: 15px;
+}
+
+/* ── CONTENUTO ── */
+.main { max-width: 900px; margin: 0 auto; padding: 24px 16px 48px; }
+.card {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: 16px; padding: 22px; margin-bottom: 18px;
+}
+h1 { font-size: 2rem; font-weight: 700; margin-bottom: 6px; }
+.muted { color: var(--muted); font-size: 1.05rem; }
+.btn {
+    font-family: inherit; font-size: 1.05rem; font-weight: 600;
+    border: none; border-radius: 12px; cursor: pointer;
+    padding: 12px 20px; min-height: 44px;
+    background: var(--accent); color: #fff;
+}
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn-ghost { background: var(--input-bg); color: var(--dark); border: 1px solid var(--border); }
+
+/* Il login prende lo schermo: è l'unica cosa da fare finché non si è entrati. */
+#login {
+    position: fixed; inset: 0; z-index: 4000;
+    background: #0081C8;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 18px; padding: 24px; text-align: center; color: #fff;
+}
+#login h2 { font-size: 1.8rem; font-weight: 700; }
+#login .btn { background: #fff; color: #0081C8; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR — la barra blu della suite, ma con un marchio PROPRIO (un dado
+     esagonale) e non i cinque cerchi di AppSphere.
+     ⚠️ È la regola già scritta in garsal-apps: le barre che dicono «Garsal Apps»
+     e rimandano a `/` portano il logo, le pagine con un'identità propria no. Qui
+     si aggiunge che il marchio sta in un altro repository, dove nessuno si
+     ricorderebbe di aggiornarlo insieme alle sue cinque copie.
+     ⚠️ Sta su un disco bianco e non è decorazione: la barra è #0081C8 come il
+     tratto del dado, quindi senza fondo il disegno sparirebbe nel colore della
+     barra. -->
+<div id="garsal-top-bar">
+    <a href="/" style="display:flex;align-items:center;gap:8px;text-decoration:none;color:inherit;">
+        <svg width="22" height="22" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><circle cx="32" cy="32" r="32" fill="#fff"/><path d="M48 32 L40 45.86 L24 45.86 L16 32 L24 18.14 L40 18.14 Z" fill="none" stroke="#0081C8" stroke-width="7" stroke-linejoin="round"/></svg>
+        <div id="garsal-top-bar-text">Garsal Utils</div>
+    </a>
+    <div class="topbar-spacer"></div>
+    <div class="header-right">
+        <span class="app-version" id="versionBadge">v1.0.0</span>
+        <button class="btn-icon" id="btnLogout" title="Esci" hidden>⏻</button>
+    </div>
+</div>
+
+<div class="main">
+    <div class="card">
+        <h1>Garsal Utils</h1>
+        <p class="muted" id="chiSei">—</p>
+    </div>
+    <div class="card">
+        <h2 style="font-size:1.25rem;margin-bottom:8px;">👟 Passi</h2>
+        <p class="muted">Correggere i passi della giornata aggiungendone in
+        Health Connect. Sta <strong>nell'APK</strong> e non qui: Health Connect è
+        un permesso di sistema del telefono, e da una pagina web non si
+        raggiunge.</p>
+        <p style="margin-top:12px;">
+            <a class="btn" style="display:inline-block;text-decoration:none;"
+               href="/releases/StepInj-latest.apk">⬇ Scarica l'APK</a>
+        </p>
+        <p class="muted" style="margin-top:12px;">Le utility web si aggiungono
+        come file <code>.html</code> in radice, una per file, come in
+        garsal-apps.</p>
+    </div>
+</div>
+
+<!-- Il login copre tutto finché non si è entrati. -->
+<div id="login" hidden>
+    <svg width="72" height="72" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><circle cx="32" cy="32" r="32" fill="#fff"/><path d="M48 32 L40 45.86 L24 45.86 L16 32 L24 18.14 L40 18.14 Z" fill="none" stroke="#0081C8" stroke-width="7" stroke-linejoin="round"/></svg>
+    <h2>Garsal Utils</h2>
+    <button class="btn" onclick="loginWithGoogle()">Entra con Google</button>
+    <span class="app-version" id="loginVersion">v1.0.0</span>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+//  VERSIONE
+// ═══════════════════════════════════════════════════════════════════════════
+var APP_VERSION = 'v1.0.0';
+var BUILD_TIME  = '2026-09-09T00:00:00Z';
+console.log('%c GARSAL UTILS ' + APP_VERSION + ' %c build: ' + BUILD_TIME,
+    'background:#0081C8;color:#fff;font-weight:bold;padding:2px 6px;border-radius:3px 0 0 3px',
+    'background:#222;color:#aaa;padding:2px 6px;border-radius:0 3px 3px 0');
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  AMBIENTE: dev vs produzione
+//  Lo stesso blocco di garsal-apps: la scelta si fa dall'hostname, così non
+//  esiste nessun interruttore da ricordarsi di spostare prima di pubblicare.
+//  ⚠️ Il progetto Supabase serve QUI SOLO PER IL LOGIN: garsal-utils non ha
+//  tabelle proprie e non applica migration (supabase/migrations è vuota).
+// ═══════════════════════════════════════════════════════════════════════════
+const _DEV_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0'];
+const _IS_DEV = _DEV_HOSTS.includes(window.location.hostname)
+             || (window.location.hostname.endsWith('.netlify.app')
+                && window.location.hostname.startsWith('dev--'));
+const SUPABASE_URL = _IS_DEV
+    ? 'https://hcmmywitrbmcsmytjbaf.supabase.co'
+    : 'https://jajlmmdsjlvzgcxiiypk.supabase.co';
+const SUPABASE_KEY = _IS_DEV
+    ? 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhjbW15d2l0cmJtY3NteXRqYmFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3ODE1NDUsImV4cCI6MjA4OTM1NzU0NX0.pAtj6THjWXibrMulU1IVGH-BFx4YkjkNT_x07lNUfWE'
+    : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImphamxtbWRzamx2emdjeGlpeXBrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk5NTU0NjYsImV4cCI6MjA4NTUzMTQ2Nn0.ikaipwxOvIn43epayQ4mSZQkXtin3aaGEPouafwJFxU';
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  AUTH
+// ═══════════════════════════════════════════════════════════════════════════
+function loginWithGoogle() {
+  // ⚠️ Nessuna pagina-ponte per un WebView, a differenza di garsal-apps: qui
+  // l'APK è nativa e il login lo fa da sé col suo schema. Aggiungendo un giorno
+  // un WebView, servirà una `oauth-callback.html` propria — con uno schema
+  // diverso da `garsalapps://`, o Android chiederebbe a ogni login quale delle
+  // due app aprire.
+  const redirect = window.location.href.split('#')[0].split('?')[0];
+  window.location.href = `${SUPABASE_URL}/auth/v1/authorize?provider=google`
+    + `&redirect_to=${encodeURIComponent(redirect)}`
+    + `&scopes=${encodeURIComponent('email profile')}`;
+}
+
+// Il token torna nel FRAGMENT dell'URL: si legge, si archivia e si toglie dalla
+// barra degli indirizzi, o basta un refresh per rimetterci dentro un token
+// ormai speso.
+function readTokenFromHash() {
+  const hash = window.location.hash.slice(1);
+  if (!hash) return null;
+  const p = {};
+  hash.split('&').forEach(kv => { const [k, v] = kv.split('='); p[decodeURIComponent(k)] = decodeURIComponent(v || ''); });
+  if (!p.access_token) return null;
+  localStorage.setItem('sb_token', p.access_token);
+  if (p.refresh_token) localStorage.setItem('refresh_token', p.refresh_token);
+  history.replaceState(null, '', window.location.pathname);
+  return p.access_token;
+}
+
+async function getUserInfo(token) {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + token }
+    });
+    return res.ok ? await res.json() : null;
+  } catch (e) { return null; }
+}
+
+// Rinnova il JWT senza rifare il login. Un token scaduto non è un logout: è un
+// token da rinnovare, e buttare fuori l'utente sarebbe il modo peggiore di dirlo.
+async function refreshSession() {
+  const refreshToken = localStorage.getItem('refresh_token');
+  if (!refreshToken) return null;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refreshToken })
+    });
+    if (!res.ok) { localStorage.removeItem('sb_token'); localStorage.removeItem('refresh_token'); return null; }
+    const d = await res.json();
+    if (d.access_token) localStorage.setItem('sb_token', d.access_token);
+    if (d.refresh_token) localStorage.setItem('refresh_token', d.refresh_token);
+    return d.access_token || null;
+  } catch (e) { return null; }
+}
+
+function logout() {
+  localStorage.removeItem('sb_token');
+  localStorage.removeItem('refresh_token');
+  window.location.reload();
+}
+
+function mostraLogin(mostra) {
+  document.getElementById('login').hidden = !mostra;
+  document.getElementById('btnLogout').hidden = mostra;
+}
+
+async function avvio() {
+  document.getElementById('versionBadge').textContent = APP_VERSION;
+  document.getElementById('loginVersion').textContent = APP_VERSION;
+  document.getElementById('btnLogout').onclick = logout;
+
+  let token = readTokenFromHash() || localStorage.getItem('sb_token');
+  if (!token) { mostraLogin(true); return; }
+
+  let user = await getUserInfo(token);
+  if (!user) {                       // scaduto: si prova a rinnovarlo prima di arrendersi
+    token = await refreshSession();
+    user = token ? await getUserInfo(token) : null;
+  }
+  if (!user) { mostraLogin(true); return; }
+
+  mostraLogin(false);
+  document.getElementById('chiSei').textContent = user.email || 'utente';
+}
+
+avvio();
+</script>
+</body>
+</html>

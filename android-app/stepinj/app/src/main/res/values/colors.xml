@@ -1,0 +1,6 @@
+<resources>
+    <!-- Il fondo della finestra prima del primo frame, e quello dell'icona adattiva.
+         Nero come l'APK nativa di AppSphere: il marchio è pensato su fondo scuro. -->
+    <color name="avvio">#111111</color>
+    <color name="ic_launcher_background">#111111</color>
+</resources>

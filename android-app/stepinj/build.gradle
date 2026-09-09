@@ -1,0 +1,8 @@
+// Progetto Gradle a sé, come appsphere-native e spese-in-giro in garsal-apps, e non
+// un modulo di `android-app`: qui l'APK è una sola, e un giorno che ce ne fosse
+// un'altra ogni tocco a un `settings.gradle` condiviso ne sveglierebbe la build.
+plugins {
+    id 'com.android.application'             version '8.9.1'  apply false
+    id 'org.jetbrains.kotlin.android'         version '2.1.20' apply false
+    id 'org.jetbrains.kotlin.plugin.compose'  version '2.1.20' apply false
+}

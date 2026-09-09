@@ -1,0 +1,42 @@
+[build]
+  publish = "."
+  base = "."
+  functions = "netlify/functions"
+
+# HTML mai in cache: la root "/" è servita da index.html (un file fisico ha la
+# precedenza su qualsiasi redirect) e deve sempre arrivare nell'ultima versione,
+# o l'APK resta su una pagina vecchia col login rotto.
+[[headers]]
+  for = "/"
+  [headers.values]
+    Cache-Control = "no-store, no-cache, must-revalidate, max-age=0"
+
+[[headers]]
+  for = "/*.html"
+  [headers.values]
+    Cache-Control = "no-store, no-cache, must-revalidate, max-age=0"
+
+[[headers]]
+  for = "/releases/*.apk"
+  [headers.values]
+    Content-Type = "application/vnd.android.package-archive"
+    Content-Disposition = "attachment"
+
+# La scheda della build (versione, data, peso, impronta dell'APK lì accanto) non
+# va mai in cache: se resta indietro la pagina annuncia una versione e ne fa
+# scaricare un'altra, che è esattamente il modo di sbagliare che questa scheda
+# esiste per togliere di mezzo.
+[[headers]]
+  for = "/releases/*.json"
+  [headers.values]
+    Content-Type = "application/json"
+    Cache-Control = "no-store, no-cache, must-revalidate, max-age=0"
+
+# ── Branch deploy per dev/** ──────────────────────────────────────────────────
+# I branch dev/** ottengono un URL preview: dev--<branch>--<sitename>.netlify.app
+# e NON vengono mai mergiati su main (workflow separato deploy-dev.yml).
+# Da attivare in Netlify → Site configuration → Build & deploy → Branch deploys
+# → aggiungere il pattern: dev/*
+[context.branch-deploy]
+  command = ""
+  publish = "."

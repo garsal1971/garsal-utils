@@ -1,0 +1,10 @@
+<resources>
+    <!-- I colori veri li mette Compose: questo tema serve solo alla finestra prima
+         che il primo frame sia disegnato. Il fondo è quello scuro del marchio, così
+         l'avvio non lampeggia di bianco. -->
+    <style name="Theme.StepInj" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/avvio</item>
+        <item name="android:statusBarColor">@color/avvio</item>
+        <item name="android:navigationBarColor">@color/avvio</item>
+    </style>
+</resources>

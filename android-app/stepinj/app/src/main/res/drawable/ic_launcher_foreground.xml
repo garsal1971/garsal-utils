@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Un dado esagonale, e NON i cinque cerchi di AppSphere.
+  ⚠️ Non è una dimenticanza: il marchio a cinque cerchi vive già in cinque file
+  dentro garsal-apps e va cambiato in tutti e cinque insieme — è già successo che
+  divergessero. Una sesta copia, per giunta in un altro repository, sarebbe quella
+  che nessuno si ricorderebbe di aggiornare. È la stessa ragione per cui l'APK
+  «Spese in giro» porta una bicicletta: garsal-utils non è un'app della suite —
+  non ha una bolla in cm_apps e non legge le sue tabelle.
+
+  ⚠️ Il raggio è 28dp e non di più: la tela adattiva è 108dp ma il launcher
+  garantisce solo il CERCHIO centrale da 36dp di raggio. Con la giunzione tonda
+  l'angolo più esterno cade a 28 + 13/2 = 34,5dp dal centro, dentro quel cerchio.
+  Allargandolo per riempire la maschera quadrata, quella tonda taglierebbe le
+  punte — e non si vedrebbe finché non lo si prova su un launcher che la usa.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:pathData="M82,54 L68,78.25 L40,78.25 L26,54 L40,29.75 L68,29.75 Z"
+        android:strokeColor="#0081C8"
+        android:strokeWidth="13"
+        android:strokeLineJoin="round"
+        android:strokeLineCap="round" />
+</vector>

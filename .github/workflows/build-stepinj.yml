@@ -1,0 +1,151 @@
+name: Build StepInj APK
+
+on:
+  push:
+    branches:
+      - main
+      - 'claude/**'
+    paths:
+      - 'android-app/stepinj/**'
+      - '.github/workflows/build-stepinj.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        run: |
+          SDKMANAGER=$(find "${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}/cmdline-tools" \
+            -name "sdkmanager" -type f 2>/dev/null | sort | tail -1)
+          if [ -n "$SDKMANAGER" ]; then
+            yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
+            "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0" 2>&1 || true
+          fi
+
+      # ⚠️ La stessa firma degli APK di garsal-apps (stessi secret, stessa chiave):
+      # un pacchetto firmato con una chiave diversa NON si installa sopra al
+      # precedente, e chi ce l'ha già dovrebbe disinstallare.
+      - name: Prepara keystore
+        run: |
+          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android-app/stepinj/garsal.keystore
+            echo "KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
+            echo "KEY_ALIAS=${{ secrets.KEY_ALIAS }}"                  >> $GITHUB_ENV
+            echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}"            >> $GITHUB_ENV
+            echo "✅ Keystore dai secrets — build release con firma fissa"
+          else
+            echo "::error::KEYSTORE_BASE64 non configurato — impossibile firmare in modo stabile."
+            echo "::error::Copia i quattro secret (KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD) da garsal-apps."
+            exit 1
+          fi
+
+      - name: Make gradlew executable
+        run: chmod +x android-app/stepinj/gradlew
+
+      - name: Build StepInj release APK
+        working-directory: android-app/stepinj
+        run: |
+          ./gradlew :app:assembleRelease --no-daemon \
+            -Pandroid.injected.signing.store.file="${{ github.workspace }}/android-app/stepinj/garsal.keystore" \
+            -Pandroid.injected.signing.store.password="$KEYSTORE_PASSWORD" \
+            -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
+            -Pandroid.injected.signing.key.password="$KEY_PASSWORD"
+
+      # ⚠️ material-icons-extended o un modello ML Kit incorporato portano un APK
+      # da 10 a 50-70 MB senza che nessuno se ne accorga: l'avviso è qui perché
+      # non possa succedere in silenzio.
+      - name: Controlla il peso dell'APK
+        run: |
+          APK=android-app/stepinj/app/build/outputs/apk/release/app-release.apk
+          MB=$(( $(stat -c%s "$APK") / 1048576 ))
+          echo "Peso APK: ${MB} MB"
+          [ "$MB" -gt 25 ] && echo "::warning::L'APK pesa ${MB} MB (oltre 25): controlla cosa è finito nel DEX"
+          exit 0
+
+      - name: Upload APK as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: StepInj-release
+          path: android-app/stepinj/app/build/outputs/apk/release/app-release.apk
+          retention-days: 30
+
+      # ⚠️ Il push su main va rifatto se main si muove sotto i piedi: dallo
+      # stesso commit può partire anche il merge di deploy.yml, e chi arriva prima
+      # lascia all'altro un push rifiutato con l'APK già compilato e buttato via.
+      - name: Pubblica APK su main (scaricabile via Netlify)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          VERSION=$(grep versionName android-app/stepinj/app/build.gradle | grep -o '"[^"]*"' | tr -d '"' | head -1)
+          VERSION_CODE=$(grep versionCode android-app/stepinj/app/build.gradle | grep -o '[0-9]\+' | head -1)
+          cp android-app/stepinj/app/build/outputs/apk/release/app-release.apk /tmp/StepInj-latest.apk
+
+          # ── La scheda della build ─────────────────────────────────────────
+          # Il nome del pacchetto è fisso (`StepInj-latest.apk`), quindi da fuori
+          # una build vale l'altra: senza questa scheda non c'è modo di sapere
+          # *quale* versione si sta per scaricare. Stesse sette chiavi delle schede
+          # di garsal-apps, così `Aggiornamento.kt` è lo stesso file.
+          BYTES=$(stat -c%s /tmp/StepInj-latest.apk)
+          SHA=$(sha256sum /tmp/StepInj-latest.apk | cut -d' ' -f1)
+          cat > /tmp/StepInj-latest.json <<EOF
+          {
+            "app": "StepInj",
+            "version": "$VERSION",
+            "versionCode": $VERSION_CODE,
+            "builtAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "commit": "$GITHUB_SHA",
+            "bytes": $BYTES,
+            "sha256": "$SHA"
+          }
+          EOF
+          cat /tmp/StepInj-latest.json
+
+          for i in 1 2 3 4 5; do
+            git fetch origin main
+            git checkout -B main origin/main
+            git reset --hard origin/main
+
+            mkdir -p releases
+            cp /tmp/StepInj-latest.apk releases/StepInj-latest.apk
+
+            # ⚠️ La scheda si aggiorna solo se si aggiorna l'APK: `builtAt` cambia a
+            # ogni run, e commetterla da sola annuncerebbe una build nuova per un
+            # pacchetto identico a quello di prima.
+            git add releases/StepInj-latest.apk
+            if git diff --staged --quiet && [ -f releases/StepInj-latest.json ]; then
+              echo "APK non cambiato, skip commit"
+              exit 0
+            fi
+
+            cp /tmp/StepInj-latest.json releases/StepInj-latest.json
+            git add releases/StepInj-latest.json
+
+            git commit -m "chore: aggiorna APK StepInj v${VERSION} [skip actions]"
+            if git push origin main; then
+              echo "✅ pubblicato al tentativo $i"
+              exit 0
+            fi
+
+            echo "⚠️  main si è mosso, riprovo ($i/5)"
+            sleep $((i * 5))
+          done
+
+          echo "❌ main continua a muoversi: APK non pubblicato"
+          exit 1

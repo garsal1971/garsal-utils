@@ -1,0 +1,195 @@
+name: Deploy claude branch → main
+
+on:
+  push:
+    branches:
+      - 'claude/**'
+  # Avvio manuale: gli step Supabase sono normalmente decisi da quali file tocca il
+  # commit, e questo lascia scoperto il caso in cui il deploy fallisce a valle del
+  # merge — il codice è già su main, quindi nessun commit successivo "tocca" più le
+  # migration e non c'è modo di riprovare se non con un commit finto.
+  workflow_dispatch:
+    inputs:
+      run_migrations:
+        description: 'Applica le migration in sospeso'
+        type: boolean
+        default: true
+      deploy_functions:
+        description: 'Edge Function da ridistribuire, separate da virgola (vuoto = nessuna)'
+        type: string
+        default: ''
+
+env:
+  # ⚠️ VUOTO DI PROPOSITO. garsal-utils non ha (ancora) un progetto Supabase suo:
+  # il login delle pagine passa dal progetto di garsal-apps, ma qui non si
+  # applica nessuna migration e non si distribuisce nessuna Edge Function.
+  #
+  # Mettendoci il ref di garsal-apps si romperebbe in silenzio: `supabase db push`
+  # confronta la cartella supabase/migrations di QUESTO repo con lo storico delle
+  # migration applicate al progetto, e due repo che spingono sullo stesso progetto
+  # si creano placeholder a vicenda.
+  #
+  # Il giorno che serve un database: si crea un progetto Supabase dedicato e si
+  # scrive qui il suo ref. Finché resta vuoto, il passo di verifica qui sotto
+  # ferma il deploy con un messaggio invece di lasciar fallire la CLI.
+  SUPABASE_PROJECT_REF: ''
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      # ⚠️ Il push su main può essere rifiutato senza che ci sia nessun conflitto:
+      # è una gara, non un errore. La build dell'APK parte dallo stesso push di
+      # questo job e a lavoro finito committa il pacchetto **su main**; su un
+      # commit che tocca insieme le pagine e il codice Android arriva mentre questo
+      # job è ancora al checkout, e il push trova un main più avanti —
+      # `! [rejected] (fetch first)`.
+      #
+      # Si rilegge main e si rifà il merge, fino a cinque volte. Un conflitto vero
+      # invece **non si riprova**: `git merge` esce diverso da zero e con `bash -e`
+      # il passo muore lì, che è quello che deve succedere — un conflitto lo risolve
+      # una persona, non un ciclo.
+      - name: Merge branch into main and push
+        run: |
+          BRANCH="${{ github.ref_name }}"
+
+          for TENTATIVO in 1 2 3 4 5; do
+            git fetch origin main
+            git checkout -B main origin/main
+            git merge "origin/$BRANCH" --no-ff -m "deploy: $BRANCH → main [$(date -u '+%Y-%m-%dT%H:%M:%SZ')]"
+
+            if git push origin main; then
+              echo "✓ main aggiornato (tentativo $TENTATIVO)"
+              exit 0
+            fi
+
+            echo "⚠️ push rifiutato al tentativo $TENTATIVO: main si è mosso, rileggo e rifaccio il merge"
+            sleep $((TENTATIVO * 5))
+          done
+
+          echo "::error::push su main rifiutato dopo 5 tentativi — qualcuno continua a scriverci"
+          exit 1
+
+      # Sull'avvio manuale non c'è un commit da ispezionare: cosa fare lo dicono gli
+      # input. FN_LIST viaggia insieme ai flag perché su dispatch le funzioni da
+      # ridistribuire non si possono dedurre dal diff.
+      - name: Check what changed
+        id: check_changes
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            FN_LIST=$(echo "${{ inputs.deploy_functions }}" | tr ',' ' ' | xargs || true)
+            [ -n "$FN_LIST" ] && echo "functions=true" >> $GITHUB_OUTPUT || echo "functions=false" >> $GITHUB_OUTPUT
+            echo "migrations=${{ inputs.run_migrations }}" >> $GITHUB_OUTPUT
+            echo "fn_list=$FN_LIST" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          FILES=$(git diff HEAD~1 HEAD --name-only)
+          FN_LIST=$(echo "$FILES" | grep '^supabase/functions/' | awk -F/ '{print $3}' | sort -u | xargs || true)
+          if [ -n "$FN_LIST" ]; then
+            echo "functions=true" >> $GITHUB_OUTPUT
+          else
+            echo "functions=false" >> $GITHUB_OUTPUT
+          fi
+          echo "fn_list=$FN_LIST" >> $GITHUB_OUTPUT
+          if ls supabase/migrations/*.sql >/dev/null 2>&1 && echo "$FILES" | grep -q '^supabase/migrations/.*\.sql$'; then
+            echo "migrations=true" >> $GITHUB_OUTPUT
+          else
+            echo "migrations=false" >> $GITHUB_OUTPUT
+          fi
+
+      # ⚠️ Un progetto non configurato deve FERMARE il deploy con una frase, non
+      # far morire la CLI dieci righe più in basso con un errore che parla d'altro.
+      - name: Verifica che ci sia un progetto Supabase
+        if: steps.check_changes.outputs.functions == 'true' || steps.check_changes.outputs.migrations == 'true'
+        run: |
+          if [ -z "$SUPABASE_PROJECT_REF" ]; then
+            echo "::error::Ci sono migration o Edge Function da applicare, ma SUPABASE_PROJECT_REF è vuoto."
+            echo "::error::garsal-utils non ha ancora un progetto Supabase suo. Creane uno e scrivi il ref in env: qui sopra."
+            echo "::error::NON riusare il ref di garsal-apps: i due repo si creerebbero placeholder di migration a vicenda."
+            exit 1
+          fi
+
+      # `supabase link` non si usa: fra le altre cose chiama
+      # GET /v1/projects/{ref}/api-keys, che dal 7 agosto 2026 risponde con un errore
+      # di validazione del suo stesso schema e si porta dietro migration ed Edge
+      # Function, che con le API keys non c'entrano niente. Di link servono solo i
+      # due file che scrive in supabase/.temp, e quelli si scrivono qui.
+      - name: Prepare Supabase connection
+        if: steps.check_changes.outputs.functions == 'true' || steps.check_changes.outputs.migrations == 'true'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p supabase/.temp
+          printf '%s' "$SUPABASE_PROJECT_REF" > supabase/.temp/project-ref
+          curl -fsS -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_REF/config/database/pooler" \
+            > /tmp/pooler.json
+          python3 - <<'PY' > supabase/.temp/pooler-url
+          import json
+          rows = json.load(open('/tmp/pooler.json'))
+          if isinstance(rows, dict):
+              rows = [rows]
+          primary = next(r for r in rows if str(r.get('database_type', '')).upper() == 'PRIMARY')
+          conn = primary['connection_string']
+          # Le migration vogliono la session mode: in transaction mode (porta 6543) il
+          # pooler non regge le transazioni multi-statement di `db push`.
+          if str(primary.get('pool_mode', '')).lower() != 'session':
+              conn = conn.replace(':6543/', ':5432/')
+          print(conn, end='')
+          PY
+          echo "  → project ref e URL del pooler pronti (niente supabase link)"
+
+      - name: Setup Supabase CLI
+        if: steps.check_changes.outputs.functions == 'true' || steps.check_changes.outputs.migrations == 'true'
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Apply Supabase migrations
+        if: steps.check_changes.outputs.migrations == 'true'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          echo "▶ Applying database migrations..."
+
+          # Placeholder locali per le migration presenti sul remoto e assenti qui:
+          # senza, `db push` fallisce con "Remote migration versions not found".
+          supabase migration list --linked 2>&1 | grep -oE '[0-9]{14}' | sort -u | while read ver; do
+            if ! compgen -G "supabase/migrations/${ver}_*.sql" > /dev/null 2>&1; then
+              echo "-- Placeholder: migration $ver applicata direttamente su Supabase." \
+                > "supabase/migrations/${ver}_remote_placeholder.sql"
+              echo "  → Placeholder creato per versione $ver"
+            fi
+          done
+
+          supabase db push --linked
+
+      - name: Deploy Supabase Edge Functions
+        if: steps.check_changes.outputs.functions == 'true'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          for FN in ${{ steps.check_changes.outputs.fn_list }}; do
+            echo "▶ Deploy edge function: $FN"
+            EXTRA=""
+            if grep -q "verify_jwt = false" "supabase/functions/$FN/config.toml" 2>/dev/null; then
+              EXTRA="--no-verify-jwt"
+              echo "   ↳ verify_jwt=false → aggiunto --no-verify-jwt"
+            fi
+            supabase functions deploy "$FN" --project-ref "$SUPABASE_PROJECT_REF" $EXTRA
+          done

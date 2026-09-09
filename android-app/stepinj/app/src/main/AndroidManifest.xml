@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Health Connect — leggere i passi per dire quanti sono, scriverli per
+         aggiungerne. ⚠️ NIENTE Google Fit e nessun login Google: è la ragione
+         per cui questa app esiste (vedi Passi.kt). -->
+    <uses-permission android:name="android.permission.health.READ_STEPS" />
+    <uses-permission android:name="android.permission.health.WRITE_STEPS" />
+
+    <!-- Serve a RILEVARE Health Connect: senza, `getSdkStatus` risponde
+         «non disponibile» anche dov'è installato, perché da Android 11 un'app
+         non vede i pacchetti che non dichiara. -->
+    <queries>
+        <package android:name="com.google.android.apps.healthdata" />   <!-- HC dal Play Store (Android 9-13) -->
+        <package android:name="com.android.healthconnect.controller" /> <!-- HC di sistema (Android 14+) -->
+    </queries>
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.StepInj">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize"
+            android:launchMode="singleTask">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- Perché l'app compaia nell'elenco di Health Connect (Android 13 e
+                 precedenti). Sono due stringhe storiche diverse e ci sono
+                 tutt'e due: una che non aggancia non dà nessun errore, dà
+                 un'app che semplicemente non si trova più in quell'elenco. -->
+            <intent-filter>
+                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="androidx.health.connect.client.SHOW_PERMISSIONS_RATIONALE" />
+            </intent-filter>
+        </activity>
+
+        <!-- Lo stesso, per Android 14+, dove Health Connect è di sistema e la
+             strada è un'altra. ⚠️ `android:permission` non è un di più: senza,
+             qualunque app potrebbe aprire questa schermata. -->
+        <activity-alias
+            android:name="ViewPermissionUsageActivity"
+            android:exported="true"
+            android:permission="android.permission.START_VIEW_PERMISSION_USAGE"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- Health Connect pretende un indirizzo per l'informativa privacy. -->
+        <meta-data
+            android:name="health_privacy_policy_url"
+            android:value="https://garsal-utilss.netlify.app/privacy.html" />
+
+    </application>
+</manifest>
