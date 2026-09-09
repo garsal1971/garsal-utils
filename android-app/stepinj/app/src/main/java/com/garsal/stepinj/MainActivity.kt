@@ -81,7 +81,7 @@ private fun Contenitore() {
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            listOf("👟 Passi", "📍 MockGps").forEachIndexed { i, nome ->
+            listOf("👟 Passi", "📍 MockGps", "🚀 Apri").forEachIndexed { i, nome ->
                 if (i == scheda) {
                     Button(onClick = { scheda = i }) { Text(nome) }
                 } else {
@@ -92,7 +92,8 @@ private fun Contenitore() {
 
         when (scheda) {
             0 -> SchermataPassi()
-            else -> MockGpsScreen()
+            1 -> MockGpsScreen()
+            else -> ScorciatoiaScreen()
         }
     }
 

@@ -13,8 +13,8 @@ fa. Il giorno che le utility saranno due, la seconda avrà il suo nome allo stes
 
 **garsal-utils** è il contenitore delle utility di Salvatore: pagine web servite da
 Netlify, eventuali Edge Function Supabase, e un'APK Android — **StepInj**, che fa
-due cose: 👟 correggere i passi della giornata in Health Connect e 📍 fingere la
-posizione GPS. La lingua dell'interfaccia
+tre cose: 👟 correggere i passi della giornata in Health Connect, 📍 fingere la
+posizione GPS e 🚀 aprire un'app scelta. La lingua dell'interfaccia
 è l'italiano, come in garsal-apps.
 
 ⚠️ **Non è garsal-apps e non è la suite AppSphere.** Non ha una riga in `cm_apps`,
@@ -344,6 +344,38 @@ il pulsante che apre quella pagina di impostazioni.
   riesce a incollare proprio dal telefono su cui gira l'app.
 - **L'elenco sta nelle preferenze del telefono**, non su Supabase: l'app si deve aprire e
   funzionare senza rete, che è il caso in cui un mock serve davvero.
+
+---
+
+## 🚀 Apri — la scorciatoia a un'app installata
+
+Si sceglie un'app fra quelle che hanno un'icona nel cassetto, la scelta resta, e il
+pulsante la apre. Vive in `Scorciatoia.kt` e `ScorciatoiaScreen.kt`.
+
+⚠️ **Apre e basta, e non è una limitazione da togliere.** Non fa partire niente prima
+né dopo — non i passi, non la posizione finta: è un collegamento, non una sequenza.
+Attaccarci davanti altre azioni la trasformerebbe in un'altra cosa, e la schermata lo
+scrive in fondo perché sia chiaro anche a chi la apre fra un anno.
+
+- ⚠️ **Il `<queries>` nel manifest è la ragione per cui l'elenco non è vuoto.** Da
+  Android 11 un'app non vede i pacchetti installati se non dichiara cosa cerca, e senza
+  quel blocco l'elenco torna praticamente vuoto — **non con un errore**, con un elenco
+  corto che sembra un telefono senza app. Si dichiara l'`<intent>` MAIN/LAUNCHER e non
+  `QUERY_ALL_PACKAGES`, che chiederebbe di vedere *tutto* per una cosa che ha bisogno
+  di vedere solo ciò che si può aprire.
+- ⚠️ **L'elenco è troncato a 40 righe e NON è una `LazyColumn`**: la schermata scorre
+  già tutta, e una lista pigra dentro un contenitore che scorre riceve un'altezza
+  infinita — Compose non la disegna, si chiude con un'eccezione. Duecento righe
+  disegnate insieme costerebbero, quindi si tagliano e **lo si dice**: chi cerca un'app
+  in fondo all'alfabeto la trova col filtro.
+- ⚠️ **Un'app disinstallata non cancella la scelta**: resta scritta e la schermata dice
+  che non risulta più installata. Toglierla da sé butterebbe via in silenzio una scelta
+  fatta apposta, che torna buona il giorno che l'app viene reinstallata.
+- ⚠️ **«Non installata» e «non si apre» sono due messaggi diversi**: un pacchetto può
+  esserci e non avere nessuna schermata da aprire (servizi, app di sistema senza icona),
+  e un solo «non ha funzionato» manderebbe a cercare il guasto dalla parte sbagliata.
+- **L'elenco si legge una volta sola**, all'apertura: leggere l'etichetta di duecento
+  app costa, e rifarlo a ogni carattere digitato renderebbe la ricerca a scatti.
 
 ---
 

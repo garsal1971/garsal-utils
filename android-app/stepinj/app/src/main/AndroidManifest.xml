@@ -37,6 +37,18 @@
     <queries>
         <package android:name="com.google.android.apps.healthdata" />   <!-- HC dal Play Store (Android 9-13) -->
         <package android:name="com.android.healthconnect.controller" /> <!-- HC di sistema (Android 14+) -->
+
+        <!-- 🚀 Apri: le app che hanno un'icona nel cassetto.
+             ⚠️ Da Android 11 un'app non vede i pacchetti installati se non
+             dichiara cosa cerca, e senza questo blocco l'elenco torna
+             praticamente vuoto — non con un errore, con un elenco corto che
+             sembra un telefono senza app. È la via giusta e non
+             QUERY_ALL_PACKAGES, che chiede di vedere *tutto* per una cosa che
+             ha bisogno di vedere solo ciò che si può aprire. -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
     </queries>
 
     <application
