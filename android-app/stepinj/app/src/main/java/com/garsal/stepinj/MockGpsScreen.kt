@@ -66,11 +66,31 @@ fun MockGpsScreen() {
         ActivityResultContracts.RequestPermission()
     ) { }
 
+    // ⚠️ Il permesso di posizione serve a DUE cose diverse, e la seconda non è
+    // ovvia: a «Leggi posizione GPS», e a far partire il servizio. Da Android 14
+    // un servizio in primo piano di tipo `location` pretende che l'app abbia il
+    // permesso **concesso in quel momento**, anche se il mock non legge niente —
+    // e `startForeground` risponde altrimenti con una SecurityException che
+    // chiude l'app. Chi ha premuto Avvia si aspetta che parta, quindi il
+    // launcher riprende l'azione invece di lasciarlo ripremere.
+    var dopoPermesso by remember { mutableStateOf<(() -> Unit)?>(null) }
     val chiediPosizione = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { concesso ->
-        avviso = if (concesso) "Permesso concesso: ripremi «Leggi posizione GPS»."
-                 else "Senza il permesso di posizione non posso leggere dove sei."
+        val azione = dopoPermesso
+        dopoPermesso = null
+        if (concesso) azione?.invoke()
+        else avviso = "Senza il permesso di posizione Android non lascia partire il mock."
+    }
+
+    fun conPosizione(azione: () -> Unit) {
+        if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_FINE_LOCATION)
+            == PackageManager.PERMISSION_GRANTED) {
+            azione()
+        } else {
+            dopoPermesso = azione
+            chiediPosizione.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
     }
 
     LaunchedEffect(messaggio) { if (messaggio.isNotEmpty()) avviso = messaggio }
@@ -202,18 +222,15 @@ fun MockGpsScreen() {
                         avviso = "Ferma prima il mock: adesso il telefono risponderebbe con la posizione finta."
                         return@OutlinedButton
                     }
-                    if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_FINE_LOCATION)
-                        != PackageManager.PERMISSION_GRANTED) {
-                        chiediPosizione.launch(Manifest.permission.ACCESS_FINE_LOCATION)
-                        return@OutlinedButton
-                    }
-                    val p = posizioneAttuale(ctx)
-                    if (p == null) {
-                        avviso = "Nessuna posizione nota. Apri una mappa per farla agganciare, poi riprova."
-                    } else {
-                        daAggiungere = if (daAggiungere.isBlank()) p.chiave()
-                                       else daAggiungere.trimEnd() + "\n" + p.chiave()
-                        avviso = "Letta ${p.testo()} — premi «Aggiungi alla tabella» per tenerla."
+                    conPosizione {
+                        val p = posizioneAttuale(ctx)
+                        if (p == null) {
+                            avviso = "Nessuna posizione nota. Apri una mappa per farla agganciare, poi riprova."
+                        } else {
+                            daAggiungere = if (daAggiungere.isBlank()) p.chiave()
+                                           else daAggiungere.trimEnd() + "\n" + p.chiave()
+                            avviso = "Letta ${p.testo()} — premi «Aggiungi alla tabella» per tenerla."
+                        }
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
@@ -248,22 +265,25 @@ fun MockGpsScreen() {
         Button(
             enabled = !attivo && punti.isNotEmpty(),
             onClick = {
-                val guasto = MockGps.perche(ctx)
-                if (guasto != null) { avviso = guasto; return@Button }
-
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                    ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS)
-                    != PackageManager.PERMISSION_GRANTED) {
-                    chiediNotifiche.launch(Manifest.permission.POST_NOTIFICATIONS)
+                conPosizione {
+                    val guasto = MockGps.perche(ctx)
+                    if (guasto != null) {
+                        avviso = guasto
+                    } else {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                            ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS)
+                            != PackageManager.PERMISSION_GRANTED) {
+                            chiediNotifiche.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                        val daUsare = if (scelti.isEmpty()) punti.toList()
+                                      else punti.filter { scelti.contains(it.chiave()) }
+                        MockGpsService.avvia(
+                            ctx, daUsare,
+                            secondi.toIntOrNull() ?: 5,
+                            minuti.toIntOrNull() ?: 5,
+                        )
+                    }
                 }
-
-                val daUsare = if (scelti.isEmpty()) punti.toList()
-                              else punti.filter { scelti.contains(it.chiave()) }
-                MockGpsService.avvia(
-                    ctx, daUsare,
-                    secondi.toIntOrNull() ?: 5,
-                    minuti.toIntOrNull() ?: 5,
-                )
             },
             modifier = Modifier.fillMaxWidth(),
         ) { Text("▶ Avvia") }

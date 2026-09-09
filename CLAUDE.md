@@ -314,6 +314,16 @@ il pulsante che apre quella pagina di impostazioni.
   anche in `onDestroy`: lasciandolo registrato il telefono continua a rispondere con
   l'ultima posizione falsa anche ad app aperte dopo — un mock che non si vede più da
   nessuna parte e che nessuno sa come fermare.
+- ⚠️ **Il permesso di posizione serve anche a chi non legge la posizione.** Da
+  Android 14 un servizio in primo piano di tipo `location` pretende che l'app abbia
+  `ACCESS_FINE_LOCATION` **concesso in quel momento**, e `startForeground` risponde
+  altrimenti con una `SecurityException`. Nella v1.1.0 il permesso si chiedeva solo per
+  «Leggi posizione GPS», mai prima di Avvia: l'app **si chiudeva di colpo** premendo
+  Avvia, e dal sintomo non si capiva che il guasto era un permesso — il mock non legge
+  niente, quindi nessuno lo cercherebbe lì. Ora la schermata lo chiede prima (e riprende
+  da sé l'azione dopo la concessione), e il servizio **intercetta comunque il rifiuto**:
+  un permesso si può revocare mentre l'app è aperta, e un'eccezione fuori da
+  `onStartCommand` è un crash da cui non si capisce niente.
 - ⚠️ **Il tasto Ferma sta anche sulla notifica**: un mock che si spegne solo riaprendo
   l'app è un mock che resta acceso quando ci si dimentica di lui.
 

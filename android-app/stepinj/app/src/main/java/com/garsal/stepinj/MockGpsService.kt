@@ -50,7 +50,23 @@ class MockGpsService : Service() {
             return START_NOT_STICKY
         }
 
-        avviaInPrimoPiano(punti.size, durataMin)
+        // ⚠️ `startForeground` con tipo `location` PUÒ essere rifiutato, e il
+        // rifiuto è un'eccezione: da Android 14 pretende che l'app abbia il
+        // permesso di posizione concesso in quel momento, anche se il mock non
+        // legge niente. Non intercettarlo vuol dire l'app che si chiude di
+        // colpo premendo Avvia — che è precisamente quel che faceva la v1.1.0.
+        // La schermata il permesso ora lo chiede prima; questo è il secondo
+        // muro, perché un permesso può essere revocato mentre l'app è aperta.
+        try {
+            avviaInPrimoPiano(punti.size, durataMin)
+        } catch (e: Exception) {
+            MockStato.messaggio.value =
+                "Android non lascia partire il servizio: ${e.message ?: "permesso di posizione mancante"}. " +
+                    "Concedi a StepInj il permesso di posizione e riprova."
+            MockStato.attivo.value = false
+            stopSelf()
+            return START_NOT_STICKY
+        }
 
         val lm = getSystemService(Context.LOCATION_SERVICE) as LocationManager
         try {
@@ -154,7 +170,14 @@ class MockGpsService : Service() {
             // ⚠️ Il tasto Ferma sta sulla notifica e non solo nell'app: un mock
             // che si spegne solo riaprendo la schermata è un mock che resta
             // acceso quando ci si dimentica di lui.
-            .addAction(Notification.Action.Builder(null, "Ferma", stop).build())
+            .addAction(
+                Notification.Action.Builder(
+                    android.graphics.drawable.Icon.createWithResource(
+                        this, android.R.drawable.ic_menu_close_clear_cancel
+                    ),
+                    "Ferma", stop,
+                ).build()
+            )
             .build()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
