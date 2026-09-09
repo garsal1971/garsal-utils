@@ -36,6 +36,7 @@ garsal-utils/
 ├── supabase/
 │   ├── functions/              # Edge Function (vuota per ora)
 │   └── migrations/             # migration SQL (VUOTA di proposito, vedi sotto)
+├── comandi.html                # la guida: download dell'APK, i secret, Netlify
 ├── privacy.html                # informativa — Health Connect pretende che esista
 ├── android-app/stepinj/        # l'APK StepInj: progetto Gradle standalone, Compose
 └── .github/workflows/
@@ -268,6 +269,14 @@ passaggio, e non è una cosa che il codice possa garantire.
 ---
 
 ## I secret da configurare (Settings → Secrets and variables → Actions)
+
+⚠️ **I loro VALORI non stanno in nessun file di questo repository**, e non è una
+dimenticanza: `comandi.html` è pubblicata su `garsal-utils.netlify.app` senza login e
+il repository è pubblico, quindi una password scritta lì la legge chiunque — e
+cancellarla dopo non basterebbe, perché resterebbe nella cronologia di git finché
+qualcuno non riscrive la storia del repo. La Guida dice **quali** sono e dove si
+mettono; i valori stanno nel Forziere, col file `stepinj.keystore`.
+
 
 | Secret | Serve a | Senza |
 |---|---|---|

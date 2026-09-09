@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guida — garsal-utils v1.0.0</title>
+<style>
+:root { color-scheme: light; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #F3F4F6; color: #1F2937;
+    max-width: 46rem; margin: 0 auto; padding: 20px 16px 64px;
+    line-height: 1.55; overflow-wrap: anywhere;
+}
+h1 { font-size: 1.7rem; margin-bottom: 4px; }
+.muted { color: #6B7280; }
+.card {
+    background: #fff; border: 1px solid #E5E7EB; border-radius: 14px;
+    padding: 18px; margin-top: 16px;
+}
+.card-title { font-weight: 700; font-size: 1.1rem; margin-bottom: 8px; }
+code {
+    background: #F3F4F6; border: 1px solid #E5E7EB; border-radius: 5px;
+    padding: 1px 5px; font-size: .92em;
+}
+table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid #E5E7EB; vertical-align: top; }
+th { font-size: .85rem; text-transform: uppercase; letter-spacing: .04em; color: #6B7280; }
+.apk-btn {
+    display: block; text-align: center; text-decoration: none;
+    background: #0081C8; color: #fff; font-weight: 700;
+    border-radius: 12px; padding: 14px 16px; min-height: 48px; margin-top: 10px;
+}
+.apk-sub { text-align: center; font-size: .85rem; color: #6B7280; margin-top: 6px; }
+.avviso {
+    background: #FEF3C7; border: 1px solid #F59E0B; border-radius: 10px;
+    padding: 12px 14px; margin-top: 12px;
+}
+.avviso strong { color: #92400E; }
+</style>
+</head>
+<body>
+
+<h1>garsal-utils — guida</h1>
+<p class="muted">Le cose che si fanno di rado e che fra sei mesi non ci si ricorda.</p>
+
+<div class="card">
+    <div class="card-title">📱 StepInj — l'APK</div>
+    <p class="muted">Corregge i passi della giornata scrivendoli in Health Connect.</p>
+    <a class="apk-btn" id="siBtn" href="/releases/StepInj-latest.apk" download="StepInj.apk">
+        ⬇ Scarica StepInj
+    </a>
+    <div class="apk-sub" id="siSub">Dentro l'app: ⚙️ → 📱 Versione app</div>
+    <div class="avviso">
+        <strong>Se i passi non compaiono in Google Fit</strong>, non è l'app che non
+        funziona: Fit deve avere la sincronizzazione con Health Connect accesa. In
+        Health Connect i passi ci sono comunque — è lì che StepInj scrive.
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-title">🔑 I quattro secret della firma</div>
+    <p>Senza, la build si ferma sul passo <em>Prepara keystore</em> e lo dice. Si
+    mettono in <code>Settings → Secrets and variables → Actions</code> di questo
+    repository.</p>
+    <table>
+        <tr><th>Nome</th><th>Cos'è</th></tr>
+        <tr><td><code>KEYSTORE_BASE64</code></td><td>Il file <code>stepinj.keystore</code> in base64, su una riga sola</td></tr>
+        <tr><td><code>KEYSTORE_PASSWORD</code></td><td>La password del keystore</td></tr>
+        <tr><td><code>KEY_ALIAS</code></td><td><code>stepinj</code></td></tr>
+        <tr><td><code>KEY_PASSWORD</code></td><td>La stessa del keystore — PKCS12 le vuole uguali</td></tr>
+    </table>
+
+    <div class="avviso">
+        <strong>I valori non stanno scritti qui, ed è voluto.</strong> Questa pagina è
+        pubblicata su <code>garsal-utils.netlify.app</code> senza nessun login davanti,
+        e sta in un repository pubblico: scriverci la password vorrebbe dire che
+        chiunque può firmare un APK spacciandolo per StepInj. Non basterebbe
+        cancellarla dopo — resterebbe nella cronologia di git, su GitHub e in ogni
+        clone, finché qualcuno non riscrive la storia del repo.
+        <br><br>
+        Stanno nel <strong>Forziere</strong>, insieme al file
+        <code>stepinj.keystore</code>.
+    </div>
+
+    <p style="margin-top:12px;"><strong>⚠️ Quel keystore è insostituibile.</strong>
+    Perso lui, StepInj non si aggiorna più: il telefono rifiuta un pacchetto firmato
+    con un'altra chiave, e l'unica via sarebbe disinstallare e reinstallare.
+    Impronta SHA-1 della chiave buona, per riconoscerla:
+    <code>93:80:0E:4F:B2:1C:8F:67:04:99:7B:62:15:40:84:99:C8:66:83:15</code></p>
+
+    <p class="muted" style="margin-top:10px;">Un secret di GitHub, una volta scritto,
+    <strong>non si rilegge più</strong> — nemmeno dal proprietario. Se un giorno ti
+    servisse rimetterlo, il valore va ripreso dal keystore nel Forziere, non da GitHub.</p>
+</div>
+
+<div class="card">
+    <div class="card-title">🌐 Netlify e Supabase</div>
+    <p>Il sito è <code>garsal-utils.netlify.app</code>, collegato a questo repository.
+    Lo stesso indirizzo è scritto in due punti dell'APK — <code>Rilascio.SITO</code> in
+    <code>Aggiornamento.kt</code> e <code>health_privacy_policy_url</code> nel manifest
+    — e vanno cambiati insieme.</p>
+    <p style="margin-top:8px;">Supabase serve <strong>solo al login</strong> delle
+    pagine web: qui non ci sono tabelle e <code>supabase/migrations/</code> è vuota.
+    ⚠️ Non scrivere il ref di garsal-apps in <code>deploy.yml</code>: due repository
+    che spingono migration sullo stesso progetto si creano placeholder a vicenda.</p>
+</div>
+
+<script>
+var APP_VERSION = 'v1.0.0';
+var BUILD_TIME  = '2026-09-09T09:00:00Z';
+
+// Il file si chiama sempre `<nome>-latest.apk`, quindi da fuori una build vale
+// l'altra: la scheda `-latest.json` accanto all'APK dice QUALE versione si sta
+// per scaricare, e il `?v=` impedisce al browser di riproporre il pacchetto
+// già scaricato quando l'indirizzo è identico.
+// ⚠️ Gemello di `mostraVersione()` in comandi.html di garsal-apps: stesse sette
+// chiavi. Cambiando la forma della scheda in un workflow, cambia in tutt'e due.
+async function mostraVersione(idSub, idBtn, nomeFile, coda) {
+    const sub = document.getElementById(idSub);
+    const btn = document.getElementById(idBtn);
+    try {
+        const r = await fetch('/releases/' + nomeFile + '.json?t=' + Date.now());
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const s = await r.json();
+        const mb = (s.bytes / 1048576).toFixed(1);
+        const quando = new Date(s.builtAt).toLocaleString('it-IT');
+        sub.textContent = 'v' + s.version + ' (build ' + s.versionCode + ') · '
+                        + mb + ' MB · ' + quando + ' · ' + coda;
+        btn.href = '/releases/' + nomeFile + '.apk?v=' + s.version;
+    } catch (e) {
+        // ⚠️ Il pulsante resta: la scheda è una comodità, il download è la ragione
+        // per cui la pagina esiste. Ma si dice PERCHÉ non si è letta, invece di
+        // lasciare una riga muta che sembra un caricamento mai finito.
+        sub.textContent = 'Versione pubblicata non leggibile (' + e.message
+                        + ') — il pulsante scarica comunque l\'ultima build.';
+    }
+}
+mostraVersione('siSub', 'siBtn', 'StepInj-latest', 'dentro l\'app: ⚙️ → 📱 Versione app');
+</script>
+</body>
+</html>
