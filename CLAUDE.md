@@ -164,8 +164,19 @@ aggiornarla, lasciando indietro dati e permessi. Per la stessa ragione il nome d
 in `releases/` resta quello: gli APK già installati interrogano **quel** percorso per
 sapere se c'è un aggiornamento, e rinominarlo li lascerebbe su un 404 per sempre.
 
-⚠️ **La firma è la stessa degli APK di garsal-apps** (stessi quattro secret): un
-pacchetto firmato con una chiave diversa **non si installa sopra al precedente**.
+⚠️ **StepInj ha una chiave di firma PROPRIA**, non quella di garsal-apps: quel
+keystore era andato perso e un secret di GitHub non si rilegge — si scrive e basta,
+nemmeno il proprietario lo rivede. Non è un ripiego: la stessa chiave serve solo per
+**aggiornare un'app già installata**, e StepInj è nata dopo, quindi non c'era niente
+sopra cui installarsi. Generata il 9 settembre 2026, RSA 2048, valida 10.000 giorni,
+alias `stepinj`, impronta SHA-1 `93:80:0E:4F:B2:1C:8F:67:04:99:7B:62:15:40:84:99:C8:66:83:15`.
+
+⚠️ **Quel keystore è ora insostituibile.** Perso lui, StepInj non si aggiorna più: il
+telefono rifiuta un pacchetto firmato con un'altra chiave, e l'unica via sarebbe
+disinstallare e reinstallare. Va tenuto dove si tengono le cose che non si possono
+riavere — cioè nel Forziere, non nella cartella dei download. ⚠️ **Rigenerarne uno per
+comodità è la cosa da non fare**: costa una disinstallazione a chiunque l'abbia già
+installata.
 
 ### La scheda della build
 
@@ -267,8 +278,11 @@ passaggio, e non è una cosa che il codice possa garantire.
 | `SUPABASE_ACCESS_TOKEN` | Migration ed Edge Function | Servono solo quando ci saranno |
 | `SUPABASE_DEV_PROJECT_REF` | Il progetto dev per i branch `dev/**` | `deploy-dev.yml` lo dice e si ferma |
 
-Sono gli stessi valori di garsal-apps: vanno **copiati**, non rigenerati — una chiave
-di firma diversa fa un APK che non si installa sopra a quello che c'è.
+⚠️ **I quattro della firma NON sono quelli di garsal-apps**: StepInj ha un keystore
+suo (vedi sopra). E **non si rileggono da GitHub** — un secret si scrive e basta —
+quindi l'unica copia dei loro valori è quella che sta fuori di qui: il file
+`stepinj.keystore` e la sua password. Perduta quella, si perde la possibilità di
+aggiornare l'app.
 
 ---
 
