@@ -38,6 +38,18 @@ jobs:
             "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0" 2>&1 || true
           fi
 
+      # ⚠️ Compilare PRIMA di toccare il keystore, ed è il passo che rende
+      # leggibile la prima build di un repo nuovo: senza, «il codice non
+      # compila» e «i secret della firma non ci sono» sono la stessa luce
+      # rossa, e si va a cercare il guasto dalla parte sbagliata. Il debug si
+      # firma da sé con la chiave che genera Gradle, quindi qui non serve
+      # niente di configurato.
+      - name: Controlla che il codice compili
+        working-directory: android-app/stepinj
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleDebug --no-daemon
+
       # ⚠️ La stessa firma degli APK di garsal-apps (stessi secret, stessa chiave):
       # un pacchetto firmato con una chiave diversa NON si installa sopra al
       # precedente, e chi ce l'ha già dovrebbe disinstallare.
