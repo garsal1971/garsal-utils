@@ -34,6 +34,7 @@ garsal-utils/
 ├── index.html                  # la pagina di ingresso, servita su "/"
 ├── netlify.toml                # pubblicazione statica + intestazioni
 ├── server.sh                   # server locale (python3 -m http.server)
+├── scripts/apk-su-r2.sh        # carica l'APK su R2 (apk.garsal.men)
 ├── releases/                   # gli APK pubblicati + la loro scheda .json
 ├── supabase/
 │   ├── functions/              # Edge Function (vuota per ora)
@@ -181,6 +182,21 @@ disinstallare e reinstallare. Va tenuto dove si tengono le cose che non si posso
 riavere — cioè nel Forziere, non nella cartella dei download. ⚠️ **Rigenerarne uno per
 comodità è la cosa da non fare**: costa una disinstallazione a chiunque l'abbia già
 installata.
+
+### ⚠️ Il pacchetto si scarica da R2, la scheda resta su Netlify (v1.5.0)
+
+Come in garsal-apps-public: l'APK sta sul bucket R2 **`apk.garsal.men/StepInj-latest.apk`**,
+caricato da `scripts/apk-su-r2.sh` (copia di quello di là: cambiandolo là, va cambiato qui),
+mentre la scheda `StepInj-latest.json` resta su `garsal-utils.netlify.app/releases/`. In
+`Aggiornamento.kt` sono due costanti accanto, `SITO` e `APK`; le due pagine linkano R2.
+
+- ⚠️ **Prima R2, poi il commit**: il commit pubblica la scheda che annuncia la versione, e
+  annunciarla prima che il pacchetto sia scaricabile è un aggiornamento che dà 404.
+- ⚠️ **L'APK si committa ANCORA in `releases/`**: le StepInj fino alla v1.4.0 la cercano su
+  Netlify, e togliendola non potrebbero più aggiornarsi a quella che conosce R2. Si toglie
+  quando nessun telefono ha più una versione precedente alla 1.5.0.
+- ⚠️ `--remote` e `--cache-control no-cache` nello script **non sono facoltativi**: il
+  perché è scritto nello script e nel CLAUDE.md di garsal-apps-public.
 
 ### La scheda della build
 
@@ -495,6 +511,8 @@ mettono; i valori stanno nel Forziere, col file `stepinj.keystore`.
 | `KEYSTORE_PASSWORD` | idem | idem |
 | `KEY_ALIAS` | idem | idem |
 | `KEY_PASSWORD` | idem | idem |
+| `CLOUDFLARE_API_TOKEN` | Caricare l'APK su R2 (*Workers R2 Storage: Edit*) | Il passo su R2 fallisce, run rosso, niente pubblicato |
+| `CLOUDFLARE_ACCOUNT_ID` | idem | idem |
 | `SUPABASE_ACCESS_TOKEN` | Migration ed Edge Function | Servono solo quando ci saranno |
 | `SUPABASE_DEV_PROJECT_REF` | Il progetto dev per i branch `dev/**` | `deploy-dev.yml` lo dice e si ferma |
 

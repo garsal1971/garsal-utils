@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Guida — garsal-utils v1.0.0</title>
+<title>Guida — garsal-utils v1.0.1</title>
 <style>
 :root { color-scheme: light; }
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -51,7 +51,7 @@ th { font-size: .85rem; text-transform: uppercase; letter-spacing: .04em; color:
     della giornata scrivendoli in Health Connect — e <strong>📍 MockGps</strong>, che
     fa dire al telefono di essere altrove, ciclando su un elenco di coordinate. Più
     <strong>🚀 Apri</strong>, una scorciatoia a un'app installata a scelta.</p>
-    <a class="apk-btn" id="siBtn" href="/releases/StepInj-latest.apk" download="StepInj.apk">
+    <a class="apk-btn" id="siBtn" href="https://apk.garsal.men/StepInj-latest.apk" download="StepInj.apk">
         ⬇ Scarica StepInj
     </a>
     <div class="apk-sub" id="siSub">Dentro l'app: ⚙️ → 📱 Versione app</div>
@@ -67,6 +67,19 @@ th { font-size: .85rem; text-transform: uppercase; letter-spacing: .04em; color:
         funziona: Fit deve avere la sincronizzazione con Health Connect accesa. In
         Health Connect i passi ci sono comunque — è lì che StepInj scrive.
     </div>
+</div>
+
+<div class="card">
+    <div class="card-title">☁️ I due secret di R2</div>
+    <p>L'APK si scarica da <code>apk.garsal.men</code>, il bucket R2 di Cloudflare
+    che serve anche le APK di garsal-apps: la build ce la carica prima di
+    pubblicare la scheda della versione. Senza questi due il passo <em>Carica l'APK
+    su R2</em> fallisce e il run è rosso. Sono gli stessi di garsal-apps-public.</p>
+    <table>
+        <tr><th>Nome</th><th>Cos'è</th></tr>
+        <tr><td><code>CLOUDFLARE_API_TOKEN</code></td><td>Token con il permesso <em>Workers R2 Storage: Edit</em></td></tr>
+        <tr><td><code>CLOUDFLARE_ACCOUNT_ID</code></td><td>L'account Cloudflare su cui sta il bucket</td></tr>
+    </table>
 </div>
 
 <div class="card">
@@ -118,8 +131,8 @@ th { font-size: .85rem; text-transform: uppercase; letter-spacing: .04em; color:
 </div>
 
 <script>
-var APP_VERSION = 'v1.0.0';
-var BUILD_TIME  = '2026-09-09T09:00:00Z';
+var APP_VERSION = 'v1.0.1';
+var BUILD_TIME  = '2026-10-23T07:20:53Z';
 
 // Il file si chiama sempre `<nome>-latest.apk`, quindi da fuori una build vale
 // l'altra: la scheda `-latest.json` accanto all'APK dice QUALE versione si sta
@@ -138,7 +151,8 @@ async function mostraVersione(idSub, idBtn, nomeFile, coda) {
         const quando = new Date(s.builtAt).toLocaleString('it-IT');
         sub.textContent = 'v' + s.version + ' (build ' + s.versionCode + ') · '
                         + mb + ' MB · ' + quando + ' · ' + coda;
-        btn.href = '/releases/' + nomeFile + '.apk?v=' + s.version;
+        // ⚠️ La scheda sta qui, il pacchetto su R2: è lì che lo carica la build.
+        btn.href = 'https://apk.garsal.men/' + nomeFile + '.apk?v=' + s.version;
     } catch (e) {
         // ⚠️ Il pulsante resta: la scheda è una comodità, il download è la ragione
         // per cui la pagina esiste. Ma si dice PERCHÉ non si è letta, invece di

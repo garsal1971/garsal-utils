@@ -8,6 +8,7 @@ on:
     paths:
       - 'android-app/stepinj/**'
       - '.github/workflows/build-stepinj.yml'
+      - 'scripts/apk-su-r2.sh'
   workflow_dispatch:
 
 jobs:
@@ -100,14 +101,35 @@ jobs:
       # ⚠️ Il push su main va rifatto se main si muove sotto i piedi: dallo
       # stesso commit può partire anche il merge di deploy.yml, e chi arriva prima
       # lascia all'altro un push rifiutato con l'APK già compilato e buttato via.
-      - name: Pubblica APK su main (scaricabile via Netlify)
+      # ⚠️ La copia in /tmp sta in un passo suo e PRIMA del caricamento su R2:
+      # da qui la leggono tutt'e due i passi che pubblicano.
+      - name: Salva l'APK in /tmp
+        run: |
+          cp android-app/stepinj/app/build/outputs/apk/release/app-release.apk /tmp/StepInj-latest.apk
+
+      # ⚠️ Prima su R2, poi il commit: il commit pubblica la scheda
+      # `-latest.json`, che ANNUNCIA questa versione, e annunciarla prima che
+      # il pacchetto sia scaricabile vuol dire un aggiornamento che si offre e
+      # poi dà 404. Senza i due segreti il passo fallisce e il run è rosso, che
+      # è quel che deve fare: un caricamento saltato in silenzio è una scheda
+      # che annuncia un pacchetto che non c'è.
+      - name: Carica l'APK su R2 (apk.garsal.men)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: bash scripts/apk-su-r2.sh /tmp/StepInj-latest.apk
+
+      # ⚠️ L'APK si committa ANCORA in releases/, anche se ora si scarica da R2:
+      # le StepInj fino alla v1.4.0 la cercano su garsal-utils.netlify.app, e
+      # togliendola resterebbero su un 404 senza potersi aggiornare a quella che
+      # conosce R2. Si potrà smettere quando tutti i telefoni avranno la v1.5.0.
+      - name: Pubblica APK su main (scheda + copia per le versioni vecchie)
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
           VERSION=$(grep versionName android-app/stepinj/app/build.gradle | grep -o '"[^"]*"' | tr -d '"' | head -1)
           VERSION_CODE=$(grep versionCode android-app/stepinj/app/build.gradle | grep -o '[0-9]\+' | head -1)
-          cp android-app/stepinj/app/build/outputs/apk/release/app-release.apk /tmp/StepInj-latest.apk
 
           # ── La scheda della build ─────────────────────────────────────────
           # Il nome del pacchetto è fisso (`StepInj-latest.apk`), quindi da fuori
