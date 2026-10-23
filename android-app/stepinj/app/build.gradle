@@ -15,8 +15,8 @@ android {
         applicationId "com.garsal.stepinj"
         minSdk 26
         targetSdk 36
-        versionCode 7
-        versionName "1.5.0"
+        versionCode 8
+        versionName "1.5.1"
     }
 
     // Le pagine HTML scelgono fra dev e produzione dall'hostname (_IS_DEV); qui un
@@ -73,4 +73,10 @@ dependencies {
     // più e si passa da `Metadata.manualEntry()`, quindi cambiarla senza guardare
     // Passi.kt rompe la scrittura.
     implementation 'androidx.health.connect:connect-client:1.1.0-rc01'
+
+    // Il fused provider di Play Services, quello che legge Google Maps. ⚠️ Fingere
+    // i provider di Android non basta: Play Services ricalcola la posizione da
+    // Wi‑Fi e celle vere e ogni tanto riporta il telefono dov'è davvero. Serve la
+    // sua modalità mock (`setMockMode`), che sta solo in questa libreria.
+    implementation 'com.google.android.gms:play-services-location:21.3.0'
 }
