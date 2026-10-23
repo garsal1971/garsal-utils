@@ -377,6 +377,12 @@ il pulsante che apre quella pagina di impostazioni.
   `gps`, `network`, `fused` — **uno per volta e in `runCatching`**, perché su alcuni
   telefoni `fused` non si lascia mockare e fermarsi al primo rifiuto vorrebbe dire
   niente mock nemmeno dove il GPS ci stava.
+- ⚠️ **E non basta nemmeno il `fused` di Android** (v1.5.1): Google Maps chiede la
+  posizione al fused provider di **Play Services**, che è un altro, e col Wi‑Fi acceso la
+  ricalcolava dalle reti vicine — il telefono **ogni tanto tornava alla posizione vera**,
+  a schermo acceso e mock in corso. Ora il servizio accende anche la sua modalità mock
+  (`setMockMode(true)`, libreria `play-services-location`) e ci scrive la posizione ogni
+  secondo; allo stop la **spegne**, o Maps resterebbe fermo sull'ultima posizione finta.
 - ⚠️ **La posizione si riscrive ogni secondo, non ogni `secondiPerCoord`.** Una
   posizione finta invecchia: le app la scartano dopo qualche secondo e il sistema
   rimette in giro quella vera, quindi il mock «terrebbe» a scatti. Il passo in secondi

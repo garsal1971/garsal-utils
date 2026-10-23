@@ -11,6 +11,8 @@ import android.content.pm.ServiceInfo
 import android.location.LocationManager
 import android.os.Build
 import android.os.IBinder
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationServices
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -30,6 +32,7 @@ import kotlinx.coroutines.launch
 class MockGpsService : Service() {
 
     private var scope: CoroutineScope? = null
+    private var fused: FusedLocationProviderClient? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -85,6 +88,12 @@ class MockGpsService : Service() {
             return START_NOT_STICKY
         }
 
+        // Dopo i provider di Android e non prima: se quelli sono stati rifiutati
+        // il mock non parte, e accendere Play Services sarebbe una mezza misura.
+        val f = runCatching { LocationServices.getFusedLocationProviderClient(this) }.getOrNull()
+        f?.let { MockGps.accendiFused(it) }
+        fused = f
+
         MockStato.punti.value = punti
         MockStato.attivo.value = true
         MockStato.messaggio.value = "In corso su ${punti.size} coordinate."
@@ -111,6 +120,7 @@ class MockGpsService : Service() {
                 // scatti e sembra rotto. Il passo di `secondiPer` decide
                 // quando si CAMBIA punto, non ogni quanto lo si dice.
                 MockGps.scrivi(lm, elenco[i])
+                f?.let { MockGps.scriviFused(it, elenco[i]) }
                 delay(1000)
 
                 sulPuntoDa++
@@ -137,6 +147,8 @@ class MockGpsService : Service() {
     override fun onDestroy() {
         val lm = getSystemService(Context.LOCATION_SERVICE) as? LocationManager
         if (lm != null) MockGps.spegni(lm)
+        fused?.let { MockGps.spegniFused(it) }
+        fused = null
         scope?.cancel()
         scope = null
         MockStato.attivo.value = false

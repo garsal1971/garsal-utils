@@ -1,5 +1,6 @@
 package com.garsal.stepinj
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.location.Criteria
@@ -8,6 +9,7 @@ import android.location.LocationManager
 import android.net.Uri
 import android.os.Build
 import android.os.SystemClock
+import com.google.android.gms.location.FusedLocationProviderClient
 import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
@@ -426,24 +428,52 @@ object MockGps {
      */
     fun scrivi(lm: LocationManager, p: Punto) {
         for (provider in PROVIDER) {
-            runCatching {
-                val loc = Location(provider).apply {
-                    latitude = p.lat
-                    longitude = p.lon
-                    altitude = 0.0
-                    accuracy = 3f
-                    speed = 0f
-                    bearing = 0f
-                    time = System.currentTimeMillis()
-                    elapsedRealtimeNanos = SystemClock.elapsedRealtimeNanos()
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        verticalAccuracyMeters = 3f
-                        speedAccuracyMetersPerSecond = 1f
-                        bearingAccuracyDegrees = 1f
-                    }
-                }
-                lm.setTestProviderLocation(provider, loc)
-            }
+            runCatching { lm.setTestProviderLocation(provider, posizione(provider, p)) }
         }
+    }
+
+    private fun posizione(provider: String, p: Punto): Location = Location(provider).apply {
+        latitude = p.lat
+        longitude = p.lon
+        altitude = 0.0
+        accuracy = 3f
+        speed = 0f
+        bearing = 0f
+        time = System.currentTimeMillis()
+        elapsedRealtimeNanos = SystemClock.elapsedRealtimeNanos()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            verticalAccuracyMeters = 3f
+            speedAccuracyMetersPerSecond = 1f
+            bearingAccuracyDegrees = 1f
+        }
+    }
+
+    // ── Il fused provider di Play Services ───────────────────────────────────
+    // ⚠️ Non è il `"fused"` di LocationManager qui sopra: Google Maps e quasi
+    // tutte le app chiedono la posizione a **Play Services**, che ha un suo
+    // fused provider e mescola GPS, Wi‑Fi e celle per conto suo. Col Wi‑Fi
+    // acceso ricalcolava la posizione dalle reti vicine e ogni tanto riportava
+    // il telefono dov'era davvero (v1.5.0, segnalato con Maps a schermo
+    // acceso). In modalità mock Play Services usa SOLO le posizioni che gli si
+    // danno. Tutto in runCatching: un telefono senza Play Services finge
+    // comunque i provider di Android. Il permesso di posizione lo chiedono
+    // le schermate prima di Avvia (serve già al servizio in primo piano): da
+    // qui il lint non lo vede, e senza il `@SuppressLint` la build si ferma.
+
+    @SuppressLint("MissingPermission")
+    fun accendiFused(c: FusedLocationProviderClient) {
+        runCatching { c.setMockMode(true) }
+    }
+
+    @SuppressLint("MissingPermission")
+    fun scriviFused(c: FusedLocationProviderClient, p: Punto) {
+        runCatching { c.setMockLocation(posizione("fused", p)) }
+    }
+
+    /** ⚠️ Va spenta come si tolgono i provider di Android: lasciata accesa,
+     *  Maps resterebbe fermo sull'ultima posizione finta anche dopo lo stop. */
+    @SuppressLint("MissingPermission")
+    fun spegniFused(c: FusedLocationProviderClient) {
+        runCatching { c.setMockMode(false) }
     }
 }
