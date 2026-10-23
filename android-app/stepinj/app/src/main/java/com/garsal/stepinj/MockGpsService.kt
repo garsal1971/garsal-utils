@@ -85,6 +85,7 @@ class MockGpsService : Service() {
             return START_NOT_STICKY
         }
 
+        MockStato.punti.value = punti
         MockStato.attivo.value = true
         MockStato.messaggio.value = "In corso su ${punti.size} coordinate."
 
@@ -95,6 +96,11 @@ class MockGpsService : Service() {
             var i = 0
             var sulPuntoDa = 0
             while (System.currentTimeMillis() < fine) {
+                // ⚠️ Riletto a ogni giro e non preso una volta all'avvio: le
+                // frecce N/S/E/O lo sostituiscono mentre il mock è acceso.
+                val elenco = MockStato.punti.value
+                if (elenco.isEmpty()) break
+                if (i >= elenco.size) i = 0
                 MockStato.indice.value = i
                 MockStato.restanti.value = (fine - System.currentTimeMillis()) / 1000
 
@@ -104,14 +110,14 @@ class MockGpsService : Service() {
                 // frattempo rimette in giro quella vera — il mock «tiene» a
                 // scatti e sembra rotto. Il passo di `secondiPer` decide
                 // quando si CAMBIA punto, non ogni quanto lo si dice.
-                MockGps.scrivi(lm, punti[i])
+                MockGps.scrivi(lm, elenco[i])
                 delay(1000)
 
                 sulPuntoDa++
                 if (sulPuntoDa >= secondiPer) {
                     sulPuntoDa = 0
                     // Si ricomincia da capo: l'elenco è un giro, non una fila.
-                    i = (i + 1) % punti.size
+                    i = (i + 1) % elenco.size
                 }
             }
             MockStato.messaggio.value = "Finito: erano $durataMin minuti."
@@ -136,6 +142,7 @@ class MockGpsService : Service() {
         MockStato.attivo.value = false
         MockStato.indice.value = -1
         MockStato.restanti.value = 0
+        MockStato.punti.value = emptyList()
         super.onDestroy()
     }
 

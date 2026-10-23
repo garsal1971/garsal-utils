@@ -38,6 +38,23 @@ object MockStato {
     val restanti = MutableStateFlow(0L)
     /** L'ultima cosa successa, da scrivere a schermo. */
     val messaggio = MutableStateFlow("")
+    /**
+     * Le coordinate del giro in corso, vuoto quando è fermo.
+     *
+     * ⚠️ Il servizio le rilegge **a ogni secondo** da qui, e non le tiene solo nella
+     * sua copia presa all'avvio: le frecce N/S/E/O della schermata le sostituiscono
+     * anche qui, e il telefono si sposta al secondo dopo senza riavviare il giro —
+     * che azzererebbe il countdown di un giro che sta lavorando.
+     */
+    val punti = MutableStateFlow<List<Punto>>(emptyList())
+}
+
+/** Una lista di coordinate con un nome. L'id non cambia rinominandola. */
+data class Lista(val id: String, val nome: String)
+
+/** Le quattro frecce. */
+enum class Direzione(val etichetta: String) {
+    NORD("⬆️ N"), SUD("⬇️ S"), OVEST("⬅️ O"), EST("➡️ E")
 }
 
 object MockGps {
@@ -47,10 +64,19 @@ object MockGps {
     private const val CHIAVE_SECONDI = "mock_secondi"
     private const val CHIAVE_MINUTI = "mock_minuti"
     private const val CHIAVE_SCELTI = "mock_scelti"
+    private const val CHIAVE_LISTE = "mock_liste"
+    private const val CHIAVE_ATTIVA = "mock_lista_attiva"
+    private const val CHIAVE_MODIFICA = "mock_modifica"
+    private const val CHIAVE_METRI = "mock_metri"
 
     /** Quanto dura un giro se nessuno l'ha ancora deciso. */
     const val SECONDI_DI_PARTENZA = 5
     const val MINUTI_DI_PARTENZA = 5
+    /** Di quanto si sposta una freccia se nessuno l'ha ancora deciso. */
+    const val METRI_DI_PARTENZA = 10
+
+    /** Metri in un grado di latitudine (e di longitudine all'equatore). */
+    private const val METRI_PER_GRADO = 111_320.0
 
     /** I due tempi di un giro: quanto si sta su una coordinata, e quanto dura in tutto. */
     data class Tempi(val secondi: Int, val minuti: Int)
@@ -73,22 +99,153 @@ object MockGps {
         "fused",
     )
 
-    // ── L'elenco salvato ─────────────────────────────────────────────────────
+    // ── Le liste ─────────────────────────────────────────────────────────────
     // Nelle preferenze e non in un database: l'app si deve aprire e funzionare
     // senza rete, che è il caso in cui un mock serve davvero.
+    //
+    // ⚠️ Ogni lista ha le sue coordinate e le sue spunte, in `mock_punti_<id>` e
+    // `mock_scelti_<id>`, e se ne usa UNA alla volta: quella attiva. È lei che
+    // leggono sia la scheda 📍 sia il pulsantone ⚡ — due liste attive diverse
+    // sarebbero due giri diversi per lo stesso tocco.
 
-    fun leggiPunti(ctx: Context): List<Punto> =
-        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getString(CHIAVE_PUNTI, "")
+    private fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+    /**
+     * Le liste, nell'ordine in cui sono state create. Una riga «id\tnome».
+     *
+     * ⚠️ Fino alla v1.3.0 la lista era una sola, in `mock_punti` e `mock_scelti`
+     * senza id: la prima lettura la travasa in una lista «Principale», o chi
+     * aggiorna l'app si ritroverebbe l'elenco vuoto e le coordinate perse.
+     */
+    fun leggiListe(ctx: Context): List<Lista> {
+        val p = prefs(ctx)
+        val righe = p.getString(CHIAVE_LISTE, null)
+        if (righe == null) {
+            val prima = Lista("1", "Principale")
+            p.edit()
+                .putString(CHIAVE_LISTE, "${prima.id}\t${prima.nome}")
+                .putString(CHIAVE_ATTIVA, prima.id)
+                .putString(chiavePunti(prima.id), p.getString(CHIAVE_PUNTI, "").orEmpty())
+                .putString(chiaveScelti(prima.id), p.getString(CHIAVE_SCELTI, "").orEmpty())
+                .remove(CHIAVE_PUNTI)
+                .remove(CHIAVE_SCELTI)
+                .apply()
+            return listOf(prima)
+        }
+        return righe.lineSequence()
+            .mapNotNull { r ->
+                val pezzi = r.split('\t', limit = 2)
+                if (pezzi.size == 2 && pezzi[0].isNotBlank()) Lista(pezzi[0], pezzi[1]) else null
+            }
+            .toList()
+            .ifEmpty { listOf(Lista("1", "Principale")) }
+    }
+
+    private fun salvaListe(ctx: Context, liste: List<Lista>) {
+        prefs(ctx).edit()
+            .putString(CHIAVE_LISTE, liste.joinToString("\n") { "${it.id}\t${it.nome}" })
+            .apply()
+    }
+
+    /** La lista attiva; se quella scritta non esiste più, la prima. */
+    fun listaAttiva(ctx: Context): Lista {
+        val liste = leggiListe(ctx)
+        val id = prefs(ctx).getString(CHIAVE_ATTIVA, null)
+        return liste.firstOrNull { it.id == id } ?: liste.first()
+    }
+
+    fun scegliLista(ctx: Context, id: String) {
+        prefs(ctx).edit().putString(CHIAVE_ATTIVA, id).apply()
+    }
+
+    /**
+     * Crea una lista e la rende attiva. Con [da] ne clona le coordinate — non le
+     * spunte: una lista nuova parte senza, cioè «si usano tutte».
+     */
+    fun nuovaLista(ctx: Context, nome: String, da: Lista?): Lista {
+        val liste = leggiListe(ctx)
+        val id = ((liste.mapNotNull { it.id.toIntOrNull() }.maxOrNull() ?: 0) + 1).toString()
+        val nuova = Lista(id, nome.trim())
+        salvaListe(ctx, liste + nuova)
+        salvaPunti(ctx, nuova, if (da != null) leggiPunti(ctx, da) else emptyList())
+        salvaScelti(ctx, nuova, emptyList())
+        scegliLista(ctx, nuova.id)
+        return nuova
+    }
+
+    fun rinominaLista(ctx: Context, id: String, nome: String) {
+        salvaListe(ctx, leggiListe(ctx).map { if (it.id == id) it.copy(nome = nome.trim()) else it })
+    }
+
+    /** Toglie una lista. ⚠️ L'ultima non si toglie: senza liste non c'è niente da attivare. */
+    fun eliminaLista(ctx: Context, id: String): Boolean {
+        val liste = leggiListe(ctx)
+        if (liste.size <= 1) return false
+        val resto = liste.filter { it.id != id }
+        salvaListe(ctx, resto)
+        prefs(ctx).edit().remove(chiavePunti(id)).remove(chiaveScelti(id)).apply()
+        if (listaAttiva(ctx).id == id) scegliLista(ctx, resto.first().id)
+        return true
+    }
+
+    private fun chiavePunti(id: String) = "${CHIAVE_PUNTI}_$id"
+    private fun chiaveScelti(id: String) = "${CHIAVE_SCELTI}_$id"
+
+    fun leggiPunti(ctx: Context, lista: Lista = listaAttiva(ctx)): List<Punto> =
+        prefs(ctx)
+            .getString(chiavePunti(lista.id), "")
             .orEmpty()
             .lineSequence()
             .mapNotNull { puntoDa(it) }
             .toList()
 
-    fun salvaPunti(ctx: Context, punti: List<Punto>) {
-        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putString(CHIAVE_PUNTI, punti.joinToString("\n") { it.chiave() })
+    fun salvaPunti(ctx: Context, lista: Lista, punti: List<Punto>) {
+        prefs(ctx).edit()
+            .putString(chiavePunti(lista.id), punti.joinToString("\n") { it.chiave() })
             .apply()
+    }
+
+    /**
+     * La modalità modifica: accesa, il giro passa sulle spuntate; spenta, su tutte.
+     *
+     * ⚠️ Spenta, le spunte **restano scritte** e non si cancellano: spegnerla per un
+     * giro su tutte non deve buttare via la scelta fatta, che torna buona la volta
+     * dopo che la si riaccende.
+     */
+    fun leggiModifica(ctx: Context): Boolean = prefs(ctx).getBoolean(CHIAVE_MODIFICA, false)
+
+    fun salvaModifica(ctx: Context, accesa: Boolean) {
+        prefs(ctx).edit().putBoolean(CHIAVE_MODIFICA, accesa).apply()
+    }
+
+    fun leggiMetri(ctx: Context): Int =
+        prefs(ctx).getInt(CHIAVE_METRI, METRI_DI_PARTENZA).coerceAtLeast(1)
+
+    fun salvaMetri(ctx: Context, metri: Int) {
+        prefs(ctx).edit().putInt(CHIAVE_METRI, metri.coerceAtLeast(1)).apply()
+    }
+
+    /**
+     * Il punto spostato di [metri] verso [direzione].
+     *
+     * Un grado di latitudine vale ~111 km ovunque; uno di longitudine si stringe
+     * verso i poli col coseno della latitudine. ⚠️ Il coseno ha un pavimento: a
+     * un passo dal polo varrebbe quasi zero, e dieci metri diventerebbero mezzo
+     * giro del mondo.
+     */
+    fun sposta(p: Punto, direzione: Direzione, metri: Int): Punto {
+        val dLat = metri / METRI_PER_GRADO
+        val cos = Math.cos(Math.toRadians(p.lat)).coerceAtLeast(0.01)
+        val dLon = metri / (METRI_PER_GRADO * cos)
+        val (lat, lon) = when (direzione) {
+            Direzione.NORD -> p.lat + dLat to p.lon
+            Direzione.SUD -> p.lat - dLat to p.lon
+            Direzione.EST -> p.lat to p.lon + dLon
+            Direzione.OVEST -> p.lat to p.lon - dLon
+        }
+        // La longitudine fa il giro: 180,0001 est è 179,9999 ovest.
+        val lonGirata = ((lon + 540.0) % 360.0) - 180.0
+        return Punto(lat.coerceIn(-90.0, 90.0), lonGirata)
     }
 
     /**
@@ -121,32 +278,35 @@ object MockGps {
      * rileggono filtrate su quelle che esistono ancora — una coordinata cancellata
      * lascerebbe altrimenti una spunta che non si vede e che restringe il giro.
      */
-    fun leggiScelti(ctx: Context): Set<String> =
-        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getString(CHIAVE_SCELTI, "")
+    fun leggiScelti(ctx: Context, lista: Lista = listaAttiva(ctx)): Set<String> =
+        prefs(ctx)
+            .getString(chiaveScelti(lista.id), "")
             .orEmpty()
             .lineSequence()
             .map { it.trim() }
             .filter { it.isNotEmpty() }
             .toSet()
 
-    fun salvaScelti(ctx: Context, chiavi: Collection<String>) {
-        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putString(CHIAVE_SCELTI, chiavi.joinToString("\n"))
+    fun salvaScelti(ctx: Context, lista: Lista, chiavi: Collection<String>) {
+        prefs(ctx).edit()
+            .putString(chiaveScelti(lista.id), chiavi.joinToString("\n"))
             .apply()
     }
 
     /**
-     * Le coordinate che un giro userebbe adesso: le spuntate, o tutte se non ce n'è
-     * nessuna.
+     * Le coordinate che un giro userebbe adesso, dalla lista attiva: con la
+     * modalità modifica accesa le spuntate (o tutte se non ce n'è nessuna), spenta
+     * tutte. Una sola spuntata vuol dire **fermi lì**, senza giro.
      *
-     * ⚠️ Sta qui e non nelle due schermate: la regola «nessuna spunta = tutte» scritta
-     * due volte sono due giri diversi il giorno che una delle due cambia — e il
-     * pulsantone ⚡ userebbe coordinate diverse da quelle che la scheda 📍 dichiara.
+     * ⚠️ Sta qui e non nelle due schermate: la regola scritta due volte sono due giri
+     * diversi il giorno che una delle due cambia — e il pulsantone ⚡ userebbe
+     * coordinate diverse da quelle che la scheda 📍 dichiara.
      */
     fun daUsare(ctx: Context): List<Punto> {
-        val punti = leggiPunti(ctx)
-        val scelti = leggiScelti(ctx)
+        val lista = listaAttiva(ctx)
+        val punti = leggiPunti(ctx, lista)
+        if (!leggiModifica(ctx)) return punti
+        val scelti = leggiScelti(ctx, lista)
         val filtrati = punti.filter { scelti.contains(it.chiave()) }
         return if (filtrati.isEmpty()) punti else filtrati
     }

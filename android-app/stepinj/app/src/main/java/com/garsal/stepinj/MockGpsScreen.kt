@@ -17,12 +17,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -45,15 +48,34 @@ import androidx.core.content.ContextCompat
 fun MockGpsScreen() {
     val ctx = LocalContext.current
 
-    val punti = remember { mutableStateListOf<Punto>().apply { addAll(MockGps.leggiPunti(ctx)) } }
+    val liste = remember { mutableStateListOf<Lista>().apply { addAll(MockGps.leggiListe(ctx)) } }
+    var lista by remember { mutableStateOf(MockGps.listaAttiva(ctx)) }
+    val punti = remember { mutableStateListOf<Punto>().apply { addAll(MockGps.leggiPunti(ctx, lista)) } }
     // ⚠️ Spunte e tempi si RILEGGONO dalle preferenze e non ripartono da zero: sono
     // quello che userà anche il pulsantone ⚡, che questa schermata non la apre affatto.
     // Le chiavi si filtrano su quelle che esistono ancora — una coordinata cancellata
     // lascerebbe una spunta invisibile che restringe il giro senza dirlo.
-    val scelti = remember {
-        val vive = punti.map { it.chiave() }.toSet()
-        mutableStateListOf<String>().apply { addAll(MockGps.leggiScelti(ctx).filter { it in vive }) }
+    fun spunteVive(l: Lista): List<String> {
+        val vive = MockGps.leggiPunti(ctx, l).map { it.chiave() }.toSet()
+        return MockGps.leggiScelti(ctx, l).filter { it in vive }
     }
+    val scelti = remember { mutableStateListOf<String>().apply { addAll(spunteVive(lista)) } }
+
+    /** Passa a un'altra lista: la rende attiva e ne ricarica coordinate e spunte. */
+    fun carica(l: Lista) {
+        MockGps.scegliLista(ctx, l.id)
+        lista = l
+        punti.clear()
+        punti.addAll(MockGps.leggiPunti(ctx, l))
+        scelti.clear()
+        scelti.addAll(spunteVive(l))
+    }
+
+    var modifica by remember { mutableStateOf(MockGps.leggiModifica(ctx)) }
+    var metri by remember { mutableStateOf(MockGps.leggiMetri(ctx).toString()) }
+    var dialogo by remember { mutableStateOf<Dialogo?>(null) }
+    var nomeNuovo by remember { mutableStateOf("") }
+
     var daAggiungere by remember { mutableStateOf("") }
     val tempi = remember { MockGps.leggiTempi(ctx) }
     var secondi by remember { mutableStateOf(tempi.secondi.toString()) }
@@ -64,9 +86,44 @@ fun MockGpsScreen() {
     val indice by MockStato.indice.collectAsState()
     val restanti by MockStato.restanti.collectAsState()
     val messaggio by MockStato.messaggio.collectAsState()
+    val inGiro by MockStato.punti.collectAsState()
 
-    fun salva() = MockGps.salvaPunti(ctx, punti.toList())
-    fun salvaScelte() = MockGps.salvaScelti(ctx, scelti.toList())
+    fun salva() = MockGps.salvaPunti(ctx, lista, punti.toList())
+    fun salvaScelte() = MockGps.salvaScelti(ctx, lista, scelti.toList())
+
+    /**
+     * Sposta le spuntate e le SOSTITUISCE, nell'elenco e nel giro in corso.
+     *
+     * ⚠️ Anche nel giro: il servizio rilegge `MockStato.punti` a ogni secondo, e
+     * il telefono si sposta subito senza riavviare il mock — che azzererebbe il
+     * countdown. ⚠️ Le spunte seguono il punto spostato: perderle vorrebbe dire
+     * che la seconda pressione della stessa freccia non sposta più niente.
+     */
+    fun sposta(d: Direzione) {
+        val m = metri.toIntOrNull()?.takeIf { it > 0 } ?: run {
+            avviso = "Scrivi di quanti metri spostare."
+            return
+        }
+        val nuovi = punti.filter { scelti.contains(it.chiave()) }
+            .associate { it.chiave() to MockGps.sposta(it, d, m) }
+        if (nuovi.isEmpty()) return
+        // Un doppione romperebbe le spunte, che vanno per chiave: due righe uguali
+        // si spunterebbero e si sposterebbero sempre insieme.
+        val fermi = punti.map { it.chiave() }.filter { it !in nuovi.keys }.toSet()
+        val arrivi = nuovi.values.map { it.chiave() }
+        if (arrivi.any { it in fermi } || arrivi.toSet().size < arrivi.size) {
+            avviso = "Lo spostamento finirebbe su una coordinata che c'è già."
+            return
+        }
+        for (i in punti.indices) nuovi[punti[i].chiave()]?.let { punti[i] = it }
+        for (i in scelti.indices) nuovi[scelti[i]]?.let { scelti[i] = it.chiave() }
+        salva()
+        salvaScelte()
+        if (attivo) MockStato.punti.value = MockStato.punti.value.map { nuovi[it.chiave()] ?: it }
+        avviso = "Spostate ${nuovi.size} di $m m verso ${d.name.lowercase()}" +
+            (if (attivo) ", anche nel giro in corso." else ".")
+    }
+
     fun salvaTempi() = MockGps.salvaTempi(
         ctx,
         secondi.toIntOrNull() ?: MockGps.SECONDI_DI_PARTENZA,
@@ -117,9 +174,10 @@ fun MockGpsScreen() {
         // ── Quel che sta succedendo ───────────────────────────────────────
         Riquadro(if (attivo) "IN CORSO" else "FERMO") {
             if (attivo) {
-                val p = punti.getOrNull(indice)
+                // L'indice è nel GIRO, non nell'elenco: con le spunte i due differiscono.
+                val p = inGiro.getOrNull(indice)
                 Text(
-                    "Coordinata ${indice + 1} di ${punti.size}" + (p?.let { "\n${it.testo()}" } ?: ""),
+                    "Coordinata ${indice + 1} di ${inGiro.size}" + (p?.let { "\n${it.testo()}" } ?: ""),
                     fontWeight = FontWeight.Bold,
                 )
                 Text("Si ferma da sé fra ${restanti / 60} min ${restanti % 60} s",
@@ -133,65 +191,155 @@ fun MockGpsScreen() {
             }
         }
 
+        // ── Le liste ──────────────────────────────────────────────────────
+        Riquadro("LISTA") {
+            // ⚠️ Riga che SCORRE e non va a capo, come tutte le righe di pulsanti:
+            // coi caratteri di sistema grandi tre nomi su 360 px non ci stanno.
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                liste.forEach { l ->
+                    if (l.id == lista.id) {
+                        Button(onClick = {}) { Text(l.nome) }
+                    } else {
+                        OutlinedButton(
+                            // ⚠️ A mock acceso la lista non si cambia: il giro sta usando
+                            // quella attiva, e le frecce sposterebbero punti di una lista
+                            // mentre il telefono gira su un'altra.
+                            enabled = !attivo,
+                            onClick = { carica(l); avviso = "" },
+                        ) { Text(l.nome) }
+                    }
+                }
+            }
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedButton(enabled = !attivo, onClick = {
+                    nomeNuovo = ""; dialogo = Dialogo.NUOVA
+                }) { Text("➕ Nuova") }
+                OutlinedButton(enabled = !attivo, onClick = {
+                    nomeNuovo = lista.nome + " (copia)"; dialogo = Dialogo.CLONA
+                }) { Text("⧉ Clona") }
+                OutlinedButton(onClick = {
+                    nomeNuovo = lista.nome; dialogo = Dialogo.RINOMINA
+                }) { Text("✏️ Rinomina") }
+                OutlinedButton(enabled = !attivo && liste.size > 1, onClick = {
+                    dialogo = Dialogo.ELIMINA
+                }) { Text("🗑 Elimina") }
+            }
+            if (attivo) {
+                Text("Mentre il mock è acceso la lista non si cambia.",
+                     style = MaterialTheme.typography.bodySmall)
+            }
+        }
+
         // ── L'elenco ──────────────────────────────────────────────────────
-        Riquadro("COORDINATE SALVATE (${punti.size})") {
+        Riquadro("COORDINATE (${punti.size})") {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(
+                    checked = modifica,
+                    onCheckedChange = { modifica = it; MockGps.salvaModifica(ctx, it) },
+                )
+                Text(
+                    "  Modalità modifica",
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+
             if (punti.isEmpty()) {
                 Text("Nessuna. Scrivile qui sotto, o leggi quella dove sei adesso.",
                      style = MaterialTheme.typography.bodyMedium)
             } else {
                 punti.forEach { p ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(
-                            checked = scelti.contains(p.chiave()),
-                            onCheckedChange = { su ->
-                                if (su) scelti.add(p.chiave()) else scelti.remove(p.chiave())
-                                salvaScelte()
-                            },
-                        )
+                        // ⚠️ Le spunte si vedono solo in modifica, ma spenta RESTANO
+                        // scritte: riaccendendola si ritrova la scelta di prima.
+                        if (modifica) {
+                            Checkbox(
+                                checked = scelti.contains(p.chiave()),
+                                onCheckedChange = { su ->
+                                    if (su) scelti.add(p.chiave()) else scelti.remove(p.chiave())
+                                    salvaScelte()
+                                },
+                            )
+                        }
                         Text(p.testo(), fontFamily = FontFamily.Monospace, fontSize = 15.sp)
                     }
                 }
 
-                // ⚠️ La riga dei pulsanti SCORRE e non va a capo: coi caratteri
-                // di sistema grandi tre pulsanti su 360 px non ci stanno.
-                Row(
-                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    OutlinedButton(onClick = {
-                        if (scelti.size == punti.size) scelti.clear()
-                        else { scelti.clear(); punti.forEach { scelti.add(it.chiave()) } }
-                        salvaScelte()
-                    }) { Text(if (scelti.size == punti.size) "Nessuno" else "Tutti") }
-
-                    OutlinedButton(
-                        enabled = scelti.isNotEmpty(),
-                        onClick = {
-                            val p = punti.firstOrNull { scelti.contains(it.chiave()) }
-                            if (p != null && !MockGps.apriInMappa(ctx, p))
-                                avviso = "Non ho trovato un'app di mappe da aprire."
-                        },
-                    ) { Text("🗺 Mappa") }
-
-                    OutlinedButton(
-                        enabled = scelti.isNotEmpty() && !attivo,
-                        onClick = {
-                            punti.removeAll { scelti.contains(it.chiave()) }
-                            scelti.clear()
-                            salva()
+                if (modifica) {
+                    // ⚠️ La riga dei pulsanti SCORRE e non va a capo: coi caratteri
+                    // di sistema grandi tre pulsanti su 360 px non ci stanno.
+                    Row(
+                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        OutlinedButton(onClick = {
+                            if (scelti.size == punti.size) scelti.clear()
+                            else { scelti.clear(); punti.forEach { scelti.add(it.chiave()) } }
                             salvaScelte()
+                        }) { Text(if (scelti.size == punti.size) "Nessuno" else "Tutti") }
+
+                        OutlinedButton(
+                            enabled = scelti.isNotEmpty(),
+                            onClick = {
+                                val p = punti.firstOrNull { scelti.contains(it.chiave()) }
+                                if (p != null && !MockGps.apriInMappa(ctx, p))
+                                    avviso = "Non ho trovato un'app di mappe da aprire."
+                            },
+                        ) { Text("🗺 Mappa") }
+
+                        OutlinedButton(
+                            enabled = scelti.isNotEmpty() && !attivo,
+                            onClick = {
+                                punti.removeAll { scelti.contains(it.chiave()) }
+                                scelti.clear()
+                                salva()
+                                salvaScelte()
+                            },
+                        ) { Text("🗑 Cancella") }
+                    }
+
+                    // ── Spostare le spuntate ──────────────────────────────
+                    OutlinedTextField(
+                        value = metri,
+                        onValueChange = {
+                            metri = it.filter { c -> c.isDigit() }.take(5)
+                            metri.toIntOrNull()?.takeIf { m -> m > 0 }?.let { m -> MockGps.salvaMetri(ctx, m) }
                         },
-                    ) { Text("🗑 Cancella") }
+                        label = { Text("Metri per ogni freccia") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Row(
+                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Direzione.entries.forEach { d ->
+                            OutlinedButton(
+                                enabled = scelti.isNotEmpty(),
+                                onClick = { sposta(d) },
+                            ) { Text(d.etichetta) }
+                        }
+                    }
                 }
 
                 // ⚠️ Le spuntate SONO quelle che si useranno, e non c'è un
                 // pulsante «Usa» che lo confermi: sarebbero due verità sulla
                 // stessa cosa, e il giorno che divergono non si saprebbe quale
-                // ha usato il giro. Nessuna spunta = si usano tutte, che è il
-                // caso più frequente e non merita una spunta per riga.
+                // ha usato il giro. La regola vive in `MockGps.daUsare`.
                 Text(
-                    if (scelti.isEmpty()) "Nessuna spuntata: si useranno tutte."
-                    else "Si useranno le ${scelti.size} spuntate, in quest'ordine.",
+                    when {
+                        !modifica -> "Modifica spenta: si useranno tutte, a giro."
+                        scelti.isEmpty() -> "Nessuna spuntata: si useranno tutte."
+                        scelti.size == 1 -> "Una sola spuntata: il telefono resta fermo lì."
+                        else -> "Si useranno le ${scelti.size} spuntate, in quest'ordine."
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
@@ -328,7 +476,68 @@ fun MockGpsScreen() {
             style = MaterialTheme.typography.bodySmall,
         )
     }
+
+    // ── Le finestre delle liste ───────────────────────────────────────────
+    when (val d = dialogo) {
+        null -> {}
+        Dialogo.ELIMINA -> AlertDialog(
+            onDismissRequest = { dialogo = null },
+            title = { Text("Eliminare «${lista.nome}»?") },
+            text = { Text("Se ne vanno anche le sue ${punti.size} coordinate, e non si recuperano.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    val via = lista.nome
+                    if (MockGps.eliminaLista(ctx, lista.id)) {
+                        liste.clear(); liste.addAll(MockGps.leggiListe(ctx))
+                        carica(MockGps.listaAttiva(ctx))
+                        avviso = "Eliminata «$via»."
+                    }
+                    dialogo = null
+                }) { Text("Elimina") }
+            },
+            dismissButton = { TextButton(onClick = { dialogo = null }) { Text("Annulla") } },
+        )
+        else -> AlertDialog(
+            onDismissRequest = { dialogo = null },
+            title = {
+                Text(when (d) {
+                    Dialogo.NUOVA -> "Nuova lista vuota"
+                    Dialogo.CLONA -> "Nuova lista, con le coordinate di «${lista.nome}»"
+                    else -> "Rinomina «${lista.nome}»"
+                })
+            },
+            text = {
+                OutlinedTextField(
+                    value = nomeNuovo,
+                    onValueChange = { nomeNuovo = it.replace('\n', ' ').replace('\t', ' ').take(40) },
+                    label = { Text("Nome") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = nomeNuovo.isNotBlank(),
+                    onClick = {
+                        when (d) {
+                            Dialogo.RINOMINA -> {
+                                MockGps.rinominaLista(ctx, lista.id, nomeNuovo)
+                                lista = lista.copy(nome = nomeNuovo.trim())
+                            }
+                            else -> carica(MockGps.nuovaLista(ctx, nomeNuovo, if (d == Dialogo.CLONA) lista else null))
+                        }
+                        liste.clear(); liste.addAll(MockGps.leggiListe(ctx))
+                        dialogo = null
+                    },
+                ) { Text("OK") }
+            },
+            dismissButton = { TextButton(onClick = { dialogo = null }) { Text("Annulla") } },
+        )
+    }
 }
+
+/** Quale finestra delle liste è aperta. */
+private enum class Dialogo { NUOVA, CLONA, RINOMINA, ELIMINA }
 
 /**
  * L'ultima posizione nota, GPS o rete.

@@ -418,6 +418,28 @@ il pulsante che apre quella pagina di impostazioni.
   diversi il giorno che una delle due cambia, col pulsantone ⚡ che usa coordinate diverse
   da quelle che la scheda 📍 dichiara.
 
+### Liste, modalità modifica e frecce (v1.4.0)
+
+- **Più liste con un nome**, una attiva alla volta (`mock_liste`, `mock_lista_attiva`;
+  coordinate e spunte in `mock_punti_<id>` e `mock_scelti_<id>`). La attiva è quella che
+  usano sia la scheda 📍 sia il pulsantone ⚡. Si creano vuote o **clonando** le coordinate
+  della attiva (non le spunte). ⚠️ La prima lettura **travasa** le vecchie `mock_punti` e
+  `mock_scelti` in una lista «Principale»: senza, chi aggiorna perderebbe l'elenco.
+- ⚠️ **A mock acceso la lista non si cambia** (né si crea, clona o elimina): il giro usa
+  la attiva, e le frecce sposterebbero punti di una lista mentre il telefono gira su
+  un'altra. L'ultima lista non si elimina.
+- **Modalità modifica** (`mock_modifica`): spenta, niente spunte a schermo e il giro passa
+  su **tutte**; accesa, compaiono spunte, Mappa/Cancella e frecce, e il giro passa sulle
+  **spuntate** (nessuna = tutte, **una sola = fermi lì**). ⚠️ Spegnendola le spunte
+  **restano scritte**: tornano buone riaccendendola. Anche questa regola sta in `daUsare()`.
+- **Le frecce ⬆️⬇️⬅️➡️** spostano le spuntate di `mock_metri` metri (10 di partenza) e le
+  **sostituiscono**; le spunte seguono il punto spostato. Uno spostamento che finirebbe su
+  una coordinata già in elenco si rifiuta: le spunte vanno per chiave, e due righe uguali
+  si muoverebbero sempre insieme.
+- ⚠️ **Lo spostamento vale subito anche a mock acceso**: il servizio rilegge le coordinate
+  da `MockStato.punti` **a ogni secondo**, e la schermata le sostituisce lì. Riavviare il
+  giro per applicarle azzererebbe il countdown.
+
 ---
 
 ## 🚀 Apri — la scorciatoia a un'app installata
