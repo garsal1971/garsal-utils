@@ -35,16 +35,18 @@ import java.net.URL
  */
 object Rilascio {
 
-    /** ⚠️ Dev'essere il sito Netlify di QUESTO repository, non quello di
-     *  garsal-apps: là `releases/StepInj-latest.apk` non esiste, e il
-     *  download finirebbe su un 404 che dal telefono si legge come «la
-     *  connessione non funziona». Da correggere appena il sito ha il suo nome. */
+    /** ⚠️ Due indirizzi, come in garsal-apps: la **scheda** (quale versione
+     *  c'è) sta sul sito Netlify di QUESTO repository, il **pacchetto** si
+     *  scarica da R2. Il sito dev'essere questo e non quello di garsal-apps:
+     *  là `releases/StepInj-latest.json` non esiste. */
     private const val SITO = "https://garsal-utils.netlify.app"
+    /** Il bucket R2 delle APK, lo stesso di garsal-apps. Nomi piatti, senza cartelle. */
+    private const val APK = "https://apk.garsal.men"
     private const val BASE = "StepInj-latest"
 
     /** Il `?v=` non serve al server: impedisce al browser di riproporre il
      *  pacchetto già scaricato quando l'indirizzo è identico. */
-    fun apk(versione: String): String = "$SITO/releases/$BASE.apk?v=$versione"
+    fun apk(versione: String): String = "$APK/$BASE.apk?v=$versione"
 
     data class Scheda(val version: String, val versionCode: Int, val bytes: Long, val sha256: String)
 
