@@ -88,18 +88,22 @@ fun MockGpsScreen() {
     val messaggio by MockStato.messaggio.collectAsState()
     val inGiro by MockStato.punti.collectAsState()
 
-    fun salva() = MockGps.salvaPunti(ctx, lista, punti.toList())
-    fun salvaScelte() = MockGps.salvaScelti(ctx, lista, scelti.toList())
-
     /**
-     * Dopo Cancella o Duplica a mock acceso, il giro riprende l'elenco con la
-     * stessa regola dell'avvio (`MockGps.daUsare`), senza riavviarsi: il servizio
-     * rilegge `MockStato.punti` a ogni secondo, e riavviarlo azzererebbe il
-     * countdown. Svuotato l'elenco, il servizio si ferma da sé.
+     * A mock acceso, ogni modifica della tabella vale subito anche per il giro,
+     * con la stessa regola dell'avvio (`MockGps.daUsare`) e senza riavviarlo: il
+     * servizio rilegge `MockStato.punti` a ogni secondo, e riavviarlo azzererebbe
+     * il countdown. Svuotato l'elenco, il servizio si ferma da sé.
+     *
+     * ⚠️ La chiamano `salva()` e `salvaScelte()`, cioè TUTTE le modifiche: fino
+     * alla v1.5.3 la facevano solo frecce, Cancella e Duplica, e un punto aggiunto
+     * o una spunta messa a mock acceso restavano fuori dal giro senza dirlo.
      */
     fun aggiornaGiro() {
         if (attivo) MockStato.punti.value = MockGps.daUsare(ctx)
     }
+
+    fun salva() { MockGps.salvaPunti(ctx, lista, punti.toList()); aggiornaGiro() }
+    fun salvaScelte() { MockGps.salvaScelti(ctx, lista, scelti.toList()); aggiornaGiro() }
 
     /**
      * Sposta le spuntate e le SOSTITUISCE, nell'elenco e nel giro in corso.
@@ -129,7 +133,6 @@ fun MockGpsScreen() {
         for (i in scelti.indices) nuovi[scelti[i]]?.let { scelti[i] = it.chiave() }
         salva()
         salvaScelte()
-        if (attivo) MockStato.punti.value = MockStato.punti.value.map { nuovi[it.chiave()] ?: it }
         avviso = "Spostate ${nuovi.size} di $m m verso ${d.name.lowercase()}" +
             (if (attivo) ", anche nel giro in corso." else ".")
     }
@@ -164,7 +167,6 @@ fun MockGpsScreen() {
         }
         if (nuovi.isEmpty() && saltate == 0) return
         salva()
-        aggiornaGiro()
         avviso = "Duplicate ${nuovi.size} (spostate di ${MockGps.METRI_DUPLICA} m)" +
             (if (saltate > 0) "; $saltate avevano già vicini su tutti i lati." else ".")
     }
@@ -286,7 +288,7 @@ fun MockGpsScreen() {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Switch(
                     checked = modifica,
-                    onCheckedChange = { modifica = it; MockGps.salvaModifica(ctx, it) },
+                    onCheckedChange = { modifica = it; MockGps.salvaModifica(ctx, it); aggiornaGiro() },
                 )
                 Text(
                     "  Modalità modifica",
@@ -345,7 +347,6 @@ fun MockGpsScreen() {
                                 scelti.clear()
                                 salva()
                                 salvaScelte()
-                                aggiornaGiro()
                             },
                         ) { Text("🗑 Cancella") }
 
