@@ -92,6 +92,16 @@ fun MockGpsScreen() {
     fun salvaScelte() = MockGps.salvaScelti(ctx, lista, scelti.toList())
 
     /**
+     * Dopo Cancella o Duplica a mock acceso, il giro riprende l'elenco con la
+     * stessa regola dell'avvio (`MockGps.daUsare`), senza riavviarsi: il servizio
+     * rilegge `MockStato.punti` a ogni secondo, e riavviarlo azzererebbe il
+     * countdown. Svuotato l'elenco, il servizio si ferma da sé.
+     */
+    fun aggiornaGiro() {
+        if (attivo) MockStato.punti.value = MockGps.daUsare(ctx)
+    }
+
+    /**
      * Sposta le spuntate e le SOSTITUISCE, nell'elenco e nel giro in corso.
      *
      * ⚠️ Anche nel giro: il servizio rilegge `MockStato.punti` a ogni secondo, e
@@ -154,6 +164,7 @@ fun MockGpsScreen() {
         }
         if (nuovi.isEmpty() && saltate == 0) return
         salva()
+        aggiornaGiro()
         avviso = "Duplicate ${nuovi.size} (spostate di ${MockGps.METRI_DUPLICA} m)" +
             (if (saltate > 0) "; $saltate avevano già vicini su tutti i lati." else ".")
     }
@@ -328,19 +339,18 @@ fun MockGpsScreen() {
                         ) { Text("🗺 Mappa") }
 
                         OutlinedButton(
-                            enabled = scelti.isNotEmpty() && !attivo,
+                            enabled = scelti.isNotEmpty(),
                             onClick = {
                                 punti.removeAll { scelti.contains(it.chiave()) }
                                 scelti.clear()
                                 salva()
                                 salvaScelte()
+                                aggiornaGiro()
                             },
                         ) { Text("🗑 Cancella") }
 
-                        // ⚠️ A mock acceso no, come Cancella: il giro usa l'elenco
-                        // preso all'avvio, e la copia ci sarebbe solo a schermo.
                         OutlinedButton(
-                            enabled = scelti.isNotEmpty() && !attivo,
+                            enabled = scelti.isNotEmpty(),
                             onClick = { duplica() },
                         ) { Text("📑 Duplica") }
                     }

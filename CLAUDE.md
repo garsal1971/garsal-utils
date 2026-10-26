@@ -462,8 +462,10 @@ il pulsante che apre quella pagina di impostazioni.
 - **📑 Duplica** (v1.5.2) copia ogni spuntata subito sotto di sé, **spostata di 1 m**
   (`MockGps.METRI_DUPLICA`; a nord, o est/sud/ovest se lì c'è già un punto). ⚠️ Non
   identica, per la stessa ragione delle frecce: due righe uguali avrebbero la stessa
-  chiave e le spunte non le distinguerebbero. Le spunte restano sugli originali. A mock
-  acceso è spento come Cancella: il giro non vedrebbe la copia.
+  chiave e le spunte non le distinguerebbero. Le spunte restano sugli originali.
+- ⚠️ **Cancella e Duplica funzionano anche a mock acceso** (v1.5.3): dopo, il giro in
+  corso riprende l'elenco con `MockGps.daUsare()` in `MockStato.punti`, senza riavviarsi
+  (che azzererebbe il countdown). Cancellate tutte, il servizio si ferma da sé.
 - ⚠️ **Lo spostamento vale subito anche a mock acceso**: il servizio rilegge le coordinate
   da `MockStato.punti` **a ogni secondo**, e la schermata le sostituisce lì. Riavviare il
   giro per applicarle azzererebbe il countdown.
