@@ -124,6 +124,40 @@ fun MockGpsScreen() {
             (if (attivo) ", anche nel giro in corso." else ".")
     }
 
+    /**
+     * Copia ogni spuntata subito sotto di sé, spostata di [MockGps.METRI_DUPLICA].
+     *
+     * ⚠️ Spostata e non identica: le spunte vanno per chiave, e due righe uguali si
+     * spunterebbero e si sposterebbero sempre insieme. Si prova a nord, poi a est,
+     * sud e ovest, finché la copia non cade su una coordinata che non c'è ancora.
+     * Le spunte restano sugli originali: la copia nasce da sistemare a parte.
+     */
+    fun duplica() {
+        val presenti = punti.map { it.chiave() }.toMutableSet()
+        val nuovi = mutableListOf<Punto>()
+        var saltate = 0
+        var i = 0
+        while (i < punti.size) {
+            val p = punti[i]
+            if (scelti.contains(p.chiave())) {
+                val copia = listOf(Direzione.NORD, Direzione.EST, Direzione.SUD, Direzione.OVEST)
+                    .map { MockGps.sposta(p, it, MockGps.METRI_DUPLICA) }
+                    .firstOrNull { it.chiave() !in presenti }
+                if (copia == null) saltate++ else {
+                    punti.add(i + 1, copia)
+                    presenti.add(copia.chiave())
+                    nuovi.add(copia)
+                    i++
+                }
+            }
+            i++
+        }
+        if (nuovi.isEmpty() && saltate == 0) return
+        salva()
+        avviso = "Duplicate ${nuovi.size} (spostate di ${MockGps.METRI_DUPLICA} m)" +
+            (if (saltate > 0) "; $saltate avevano già vicini su tutti i lati." else ".")
+    }
+
     fun salvaTempi() = MockGps.salvaTempi(
         ctx,
         secondi.toIntOrNull() ?: MockGps.SECONDI_DI_PARTENZA,
@@ -302,6 +336,13 @@ fun MockGpsScreen() {
                                 salvaScelte()
                             },
                         ) { Text("🗑 Cancella") }
+
+                        // ⚠️ A mock acceso no, come Cancella: il giro usa l'elenco
+                        // preso all'avvio, e la copia ci sarebbe solo a schermo.
+                        OutlinedButton(
+                            enabled = scelti.isNotEmpty() && !attivo,
+                            onClick = { duplica() },
+                        ) { Text("📑 Duplica") }
                     }
 
                     // ── Spostare le spuntate ──────────────────────────────
@@ -316,16 +357,24 @@ fun MockGpsScreen() {
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    Row(
-                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    // Come una bussola: N in alto, O ed E in mezzo, S in basso.
+                    // Due pulsanti per riga ci stanno anche coi caratteri grandi.
+                    @Composable
+                    fun Freccia(d: Direzione) { OutlinedButton(
+                        enabled = scelti.isNotEmpty(),
+                        onClick = { sposta(d) },
+                    ) { Text(d.etichetta) } }
+                    Column(
+                        Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
-                        Direzione.entries.forEach { d ->
-                            OutlinedButton(
-                                enabled = scelti.isNotEmpty(),
-                                onClick = { sposta(d) },
-                            ) { Text(d.etichetta) }
+                        Freccia(Direzione.NORD)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Freccia(Direzione.OVEST)
+                            Freccia(Direzione.EST)
                         }
+                        Freccia(Direzione.SUD)
                     }
                 }
 
