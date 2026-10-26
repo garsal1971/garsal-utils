@@ -1,9 +1,9 @@
 {
   "app": "StepInj",
-  "version": "1.5.2",
-  "versionCode": 9,
-  "builtAt": "2026-10-26T18:11:22Z",
-  "commit": "206ec830bbaae5a546bd496e572ba07d251a97eb",
+  "version": "1.5.3",
+  "versionCode": 10,
+  "builtAt": "2026-10-26T18:43:31Z",
+  "commit": "6de464e5be8ab163ac3074cc65090cec0e4faab8",
   "bytes": 8997828,
-  "sha256": "71fd928fd0abfe721b37fc22c9731ce1bf9fa2de305c0dc227466ac69d0a049c"
+  "sha256": "d7d924599149525a135fbdca500e2777cfa46b41ac17ae1aeadda04c27e56b65"
 }
