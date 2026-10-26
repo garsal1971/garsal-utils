@@ -451,13 +451,19 @@ il pulsante che apre quella pagina di impostazioni.
   la attiva, e le frecce sposterebbero punti di una lista mentre il telefono gira su
   un'altra. L'ultima lista non si elimina.
 - **Modalità modifica** (`mock_modifica`): spenta, niente spunte a schermo e il giro passa
-  su **tutte**; accesa, compaiono spunte, Mappa/Cancella e frecce, e il giro passa sulle
+  su **tutte**; accesa, compaiono spunte, Mappa/Cancella/Duplica e frecce, e il giro passa sulle
   **spuntate** (nessuna = tutte, **una sola = fermi lì**). ⚠️ Spegnendola le spunte
   **restano scritte**: tornano buone riaccendendola. Anche questa regola sta in `daUsare()`.
 - **Le frecce ⬆️⬇️⬅️➡️** spostano le spuntate di `mock_metri` metri (10 di partenza) e le
   **sostituiscono**; le spunte seguono il punto spostato. Uno spostamento che finirebbe su
   una coordinata già in elenco si rifiuta: le spunte vanno per chiave, e due righe uguali
   si muoverebbero sempre insieme.
+- **Le frecce stanno a bussola** (v1.5.2): N in alto, O ed E sotto affiancate, S in fondo.
+- **📑 Duplica** (v1.5.2) copia ogni spuntata subito sotto di sé, **spostata di 1 m**
+  (`MockGps.METRI_DUPLICA`; a nord, o est/sud/ovest se lì c'è già un punto). ⚠️ Non
+  identica, per la stessa ragione delle frecce: due righe uguali avrebbero la stessa
+  chiave e le spunte non le distinguerebbero. Le spunte restano sugli originali. A mock
+  acceso è spento come Cancella: il giro non vedrebbe la copia.
 - ⚠️ **Lo spostamento vale subito anche a mock acceso**: il servizio rilegge le coordinate
   da `MockStato.punti` **a ogni secondo**, e la schermata le sostituisce lì. Riavviare il
   giro per applicarle azzererebbe il countdown.

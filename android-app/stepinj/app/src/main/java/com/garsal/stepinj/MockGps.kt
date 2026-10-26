@@ -76,6 +76,8 @@ object MockGps {
     const val MINUTI_DI_PARTENZA = 5
     /** Di quanto si sposta una freccia se nessuno l'ha ancora deciso. */
     const val METRI_DI_PARTENZA = 10
+    /** Di quanto si scosta la copia di «Duplica»: una copia identica romperebbe le spunte. */
+    const val METRI_DUPLICA = 1
 
     /** Metri in un grado di latitudine (e di longitudine all'equatore). */
     private const val METRI_PER_GRADO = 111_320.0
