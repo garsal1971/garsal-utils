@@ -451,7 +451,7 @@ il pulsante che apre quella pagina di impostazioni.
   la attiva, e le frecce sposterebbero punti di una lista mentre il telefono gira su
   un'altra. L'ultima lista non si elimina.
 - **Modalità modifica** (`mock_modifica`): spenta, niente spunte a schermo e il giro passa
-  su **tutte**; accesa, compaiono spunte, Mappa/Cancella/Duplica e frecce, e il giro passa sulle
+  su **tutte**; accesa, compaiono spunte, Mappa/Cancella/Duplica/Riordina e frecce, e il giro passa sulle
   **spuntate** (nessuna = tutte, **una sola = fermi lì**). ⚠️ Spegnendola le spunte
   **restano scritte**: tornano buone riaccendendola. Anche questa regola sta in `daUsare()`.
 - **Le frecce ⬆️⬇️⬅️➡️** spostano le spuntate di `mock_metri` metri (10 di partenza) e le
@@ -463,6 +463,12 @@ il pulsante che apre quella pagina di impostazioni.
   (`MockGps.METRI_DUPLICA`; a nord, o est/sud/ovest se lì c'è già un punto). ⚠️ Non
   identica, per la stessa ragione delle frecce: due righe uguali avrebbero la stessa
   chiave e le spunte non le distinguerebbero. Le spunte restano sugli originali.
+- **🔀 Riordina** (v1.5.5) rimette **tutta** la lista nell'ordine del percorso **aperto**
+  più corto (non torna al primo), con partenza e arrivo liberi — `MockGps.riordina()`.
+  ⚠️ Fino a `MAX_ESATTO` (12) punti è il più corto davvero (Held-Karp); oltre il conto
+  esatto raddoppia a ogni punto, e si usa vicino più prossimo + 2-opt, che la schermata
+  dichiara «approssimato». Non restituisce mai un ordine più lungo di quello di partenza.
+  Le spunte vanno per chiave e restano sui loro punti; a mock acceso vale subito.
 - ⚠️ **Cancella e Duplica funzionano anche a mock acceso** (v1.5.3), e **ogni modifica
   della tabella vale subito per il giro in corso** (v1.5.4): aggiungere, spuntare,
   Tutti/Nessuno, frecce, la modalità modifica. Lo fa `aggiornaGiro()`, chiamata da

@@ -43,6 +43,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import kotlin.math.roundToInt
 
 @Composable
 fun MockGpsScreen() {
@@ -169,6 +170,27 @@ fun MockGpsScreen() {
         salva()
         avviso = "Duplicate ${nuovi.size} (spostate di ${MockGps.METRI_DUPLICA} m)" +
             (if (saltate > 0) "; $saltate avevano già vicini su tutti i lati." else ".")
+    }
+
+    /**
+     * Rimette TUTTA la lista nell'ordine del percorso aperto più corto
+     * ([MockGps.riordina]), partenza e arrivo liberi. Le spunte vanno per chiave,
+     * quindi restano sui loro punti; a mock acceso vale subito per il giro.
+     */
+    fun riordina() {
+        val prima = MockGps.lunghezza(punti)
+        val nuovi = MockGps.riordina(punti.toList())
+        val dopo = MockGps.lunghezza(nuovi)
+        if (nuovi == punti.toList()) {
+            avviso = "L'ordine era già il più corto che ho trovato (${prima.roundToInt()} m)."
+            return
+        }
+        punti.clear()
+        punti.addAll(nuovi)
+        salva()
+        avviso = "Percorso: ${prima.roundToInt()} m → ${dopo.roundToInt()} m" +
+            (if (nuovi.size > MockGps.MAX_ESATTO) " (approssimato)" else "") +
+            (if (attivo) ", anche nel giro in corso." else ".")
     }
 
     fun salvaTempi() = MockGps.salvaTempi(
@@ -354,6 +376,11 @@ fun MockGpsScreen() {
                             enabled = scelti.isNotEmpty(),
                             onClick = { duplica() },
                         ) { Text("📑 Duplica") }
+
+                        OutlinedButton(
+                            enabled = punti.size >= 3,
+                            onClick = { riordina() },
+                        ) { Text("🔀 Riordina") }
                     }
 
                     // ── Spostare le spuntate ──────────────────────────────

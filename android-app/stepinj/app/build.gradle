@@ -15,8 +15,8 @@ android {
         applicationId "com.garsal.stepinj"
         minSdk 26
         targetSdk 36
-        versionCode 11
-        versionName "1.5.4"
+        versionCode 12
+        versionName "1.5.5"
     }
 
     // Le pagine HTML scelgono fra dev e produzione dall'hostname (_IS_DEV); qui un

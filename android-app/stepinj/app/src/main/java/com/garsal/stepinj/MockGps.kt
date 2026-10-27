@@ -252,6 +252,102 @@ object MockGps {
         return Punto(lat.coerceIn(-90.0, 90.0), lonGirata)
     }
 
+    /** Distanza in metri fra due punti, con l'emisenoverso (haversine). */
+    fun distanza(a: Punto, b: Punto): Double {
+        val r = 6_371_000.0
+        val dLat = Math.toRadians(b.lat - a.lat)
+        val dLon = Math.toRadians(b.lon - a.lon)
+        val h = Math.sin(dLat / 2).let { it * it } +
+            Math.cos(Math.toRadians(a.lat)) * Math.cos(Math.toRadians(b.lat)) *
+            Math.sin(dLon / 2).let { it * it }
+        return 2 * r * Math.asin(Math.sqrt(h.coerceIn(0.0, 1.0)))
+    }
+
+    /** Lunghezza del percorso APERTO: dal primo all'ultimo, senza tornare indietro. */
+    fun lunghezza(punti: List<Punto>): Double =
+        punti.zipWithNext().sumOf { (a, b) -> distanza(a, b) }
+
+    /** Fin qui l'ordine è esatto (Held-Karp, 2^n·n² passi); oltre è approssimato. */
+    const val MAX_ESATTO = 12
+
+    /**
+     * L'ordine che rende più corto il percorso aperto, con partenza e arrivo liberi.
+     *
+     * ⚠️ Fino a [MAX_ESATTO] punti è **il più corto davvero**; oltre, il conto esatto
+     * crescerebbe col doppio a ogni punto, e si usa il vicino più prossimo da ogni
+     * partenza seguito dal 2-opt — molto buono, ma non garantito il migliore.
+     * Non restituisce mai un ordine più lungo di quello di partenza.
+     */
+    fun riordina(punti: List<Punto>): List<Punto> {
+        val n = punti.size
+        if (n < 3) return punti
+        val d = Array(n) { i -> DoubleArray(n) { j -> distanza(punti[i], punti[j]) } }
+        val ordine = if (n <= MAX_ESATTO) esatto(d) else approssimato(d)
+        val nuovo = ordine.map { punti[it] }
+        return if (lunghezza(nuovo) < lunghezza(punti)) nuovo else punti
+    }
+
+    /** Held-Karp sul cammino aperto: costo[S][j] = cammino più corto su S che finisce in j. */
+    private fun esatto(d: Array<DoubleArray>): List<Int> {
+        val n = d.size
+        val tutti = (1 shl n) - 1
+        val costo = Array(1 shl n) { DoubleArray(n) { Double.MAX_VALUE } }
+        val prima = Array(1 shl n) { IntArray(n) { -1 } }
+        for (j in 0 until n) costo[1 shl j][j] = 0.0
+        for (s in 1..tutti) for (j in 0 until n) {
+            val c = costo[s][j]
+            if (c == Double.MAX_VALUE || (s and (1 shl j)) == 0) continue
+            for (k in 0 until n) {
+                if ((s and (1 shl k)) != 0) continue
+                val t = s or (1 shl k)
+                val nc = c + d[j][k]
+                if (nc < costo[t][k]) { costo[t][k] = nc; prima[t][k] = j }
+            }
+        }
+        var j = (0 until n).minByOrNull { costo[tutti][it] }!!
+        var s = tutti
+        val giro = ArrayList<Int>(n)
+        while (j >= 0) {
+            giro.add(j)
+            val p = prima[s][j]
+            s = s and (1 shl j).inv()
+            j = p
+        }
+        return giro.reversed()
+    }
+
+    /** Vicino più prossimo da ogni partenza, poi 2-opt; tiene il più corto. */
+    private fun approssimato(d: Array<DoubleArray>): List<Int> {
+        val n = d.size
+        fun len(o: IntArray) = (0 until n - 1).sumOf { d[o[it]][o[it + 1]] }
+        var meglio: IntArray? = null
+        for (inizio in 0 until n) {
+            val visto = BooleanArray(n)
+            val o = IntArray(n)
+            o[0] = inizio; visto[inizio] = true
+            for (i in 1 until n) {
+                val a = o[i - 1]
+                val b = (0 until n).filter { !visto[it] }.minByOrNull { d[a][it] }!!
+                o[i] = b; visto[b] = true
+            }
+            // 2-opt sul cammino aperto: rovesciare o[i..k] cambia solo i due bordi,
+            // e alle estremità il bordo che manca vale zero.
+            var migliora = true
+            while (migliora) {
+                migliora = false
+                for (i in 0 until n - 1) for (k in i + 1 until n) {
+                    val prima = (if (i > 0) d[o[i - 1]][o[i]] else 0.0) +
+                        (if (k < n - 1) d[o[k]][o[k + 1]] else 0.0)
+                    val dopo = (if (i > 0) d[o[i - 1]][o[k]] else 0.0) +
+                        (if (k < n - 1) d[o[i]][o[k + 1]] else 0.0)
+                    if (dopo < prima - 1e-9) { o.reverse(i, k + 1); migliora = true }
+                }
+            }
+            if (meglio == null || len(o) < len(meglio)) meglio = o
+        }
+        return meglio!!.toList()
+    }
+
     /**
      * I due tempi e le coordinate spuntate, che stanno nelle preferenze **come
      * l'elenco** e non nella sola schermata.
