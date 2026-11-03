@@ -217,6 +217,12 @@ internal fun SchermataPassi() {
                     value = quanti,
                     onValueChange = { nuovo -> quanti = nuovo.filter { it.isDigit() }.take(7) },
                     label = { Text("Numero di passi") },
+                    // La distanza la scrive `aggiungi()` insieme ai passi: dirlo qui,
+                    // prima di premere, invece di farla scoprire nell'app della salute.
+                    supportingText = {
+                        val n = quanti.toLongOrNull() ?: 0L
+                        if (n > 0) Text("+ ≈ ${PassiRepository.km(n * METRI_PER_PASSO)} di distanza (${"%.2f".format(METRI_PER_PASSO)} m a passo)")
+                    },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),

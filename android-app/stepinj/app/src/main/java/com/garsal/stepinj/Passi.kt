@@ -4,10 +4,12 @@ import android.content.Context
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.aggregate.AggregationResult
 import androidx.health.connect.client.permission.HealthPermission
+import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.metadata.Metadata
 import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.time.TimeRangeFilter
+import androidx.health.connect.client.units.Length
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.Instant
@@ -33,11 +35,28 @@ import java.time.ZoneId
  * questo codice possa garantire, ed è l'unica incognita del passaggio.
  */
 
-/** Leggere per dire quanti ce ne sono, scrivere per aggiungerne. */
+/**
+ * Leggere per dire quanti ce ne sono, scrivere per aggiungerne — e scrivere la
+ * distanza che quei passi fanno (v1.6.0).
+ *
+ * ⚠️ Della distanza basta la **scrittura**: non la si legge da nessuna parte, e
+ * cancellare le proprie righe chiede lo stesso permesso di scriverle. Chiedere
+ * anche la lettura sarebbe un permesso in più senza niente che lo usi.
+ */
 val PERMESSI_PASSI: Set<String> = setOf(
     HealthPermission.getReadPermission(StepsRecord::class),
     HealthPermission.getWritePermission(StepsRecord::class),
+    HealthPermission.getWritePermission(DistanceRecord::class),
 )
+
+/**
+ * La lunghezza di un passo, per la distanza scritta insieme ai passi.
+ *
+ * ⚠️ Fissa di proposito: è una stima, e una casella in più per una stima sarebbe
+ * un'altra cosa da sbagliare. Cambiandola, cambia solo la distanza delle aggiunte
+ * **successive** — quelle già scritte restano come sono.
+ */
+const val METRI_PER_PASSO = 0.75
 
 /**
  * ⚠️ Health Connect rifiuta un `StepsRecord` con `count` fuori scala. Il tetto è
@@ -159,6 +178,13 @@ object PassiRepository {
             if (!inizio.isBefore(fine)) inizio = fine.minusMillis(1)
 
             val zona = ZoneId.systemDefault()
+            val finestra = "${inizio.toEpochMilli()}-${fine.toEpochMilli()}"
+            val metri = quanti * METRI_PER_PASSO
+            // ⚠️ Passi e distanza nella STESSA chiamata e nella stessa finestra: una
+            // `insertRecords` è tutta o niente, quindi non può restare scritto uno solo
+            // dei due — i passi senza la loro distanza, o una distanza senza passi.
+            // Il `clientRecordId` della distanza viene dalla stessa finestra per la
+            // stessa ragione di quello dei passi: ripremendo si sostituisce, non si somma.
             client.insertRecords(
                 listOf(
                     StepsRecord(
@@ -167,17 +193,23 @@ object PassiRepository {
                         endTime = fine,
                         startZoneOffset = zona.rules.getOffset(inizio),
                         endZoneOffset = zona.rules.getOffset(fine),
-                        metadata = Metadata.manualEntry(
-                            clientRecordId = "stepinj-${inizio.toEpochMilli()}-${fine.toEpochMilli()}"
-                        ),
-                    )
+                        metadata = Metadata.manualEntry(clientRecordId = "stepinj-$finestra"),
+                    ),
+                    DistanceRecord(
+                        distance = Length.meters(metri),
+                        startTime = inizio,
+                        endTime = fine,
+                        startZoneOffset = zona.rules.getOffset(inizio),
+                        endZoneOffset = zona.rules.getOffset(fine),
+                        metadata = Metadata.manualEntry(clientRecordId = "stepinj-dist-$finestra"),
+                    ),
                 )
             )
             prefs.edit()
                 .putLong(ULTIMO_FINE, fine.toEpochMilli())
                 .putLong(ULTIMI_PASSI, quanti)
                 .apply()
-            EsitoPassi.Ok("Aggiunti ${"%,d".format(quanti)} passi.")
+            EsitoPassi.Ok("Aggiunti ${"%,d".format(quanti)} passi (${km(metri)}).")
         } catch (e: SecurityException) {
             EsitoPassi.PermessiRichiesti
         } catch (e: Exception) {
@@ -186,7 +218,8 @@ object PassiRepository {
     }
 
     /**
-     * Toglie le righe scritte da questa app oggi.
+     * Toglie le righe scritte da questa app oggi: i passi **e la loro distanza**,
+     * che senza i passi accanto sarebbe un tragitto fatto senza camminare.
      *
      * ⚠️ **Solo le proprie**: Health Connect non lascia cancellare i dati di
      * un'altra app, e non c'è modo di aggirarlo. Quindi da qui i passi si
@@ -196,10 +229,10 @@ object PassiRepository {
      */
     suspend fun togliMiei(context: Context): EsitoPassi = withContext(Dispatchers.IO) {
         try {
-            HealthConnectClient.getOrCreate(context).deleteRecords(
-                recordType = StepsRecord::class,
-                timeRangeFilter = TimeRangeFilter.between(inizioDiOggi(), Instant.now()),
-            )
+            val client = HealthConnectClient.getOrCreate(context)
+            val oggi = TimeRangeFilter.between(inizioDiOggi(), Instant.now())
+            client.deleteRecords(recordType = StepsRecord::class, timeRangeFilter = oggi)
+            client.deleteRecords(recordType = DistanceRecord::class, timeRangeFilter = oggi)
             // Il cursore riparte: le righe di oggi non ci sono più, quindi
             // niente da cui tenersi alla larga.
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -211,6 +244,10 @@ object PassiRepository {
             EsitoPassi.Errore(e.message ?: "Errore Health Connect")
         }
     }
+
+    /** «3,75 km», o «750 m» sotto il chilometro. */
+    fun km(metri: Double): String =
+        if (metri < 1000) "${metri.toLong()} m" else "%.2f km".format(metri / 1000)
 
     /** La mezzanotte di oggi in ora **locale**: il giorno è quello del telefono,
      *  non quello di UTC — fra mezzanotte e le due sarebbe ancora ieri. */

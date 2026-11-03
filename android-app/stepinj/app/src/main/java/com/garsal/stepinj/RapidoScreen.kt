@@ -6,6 +6,7 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,10 +14,16 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -26,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -38,11 +46,11 @@ import kotlinx.coroutines.launch
  * l'app**. È la prima scheda e quella su cui l'app si apre, perché è il gesto che si fa
  * tutti i giorni — le altre tre configurano, questa esegue.
  *
- * ⚠️ **Non configura niente, di proposito.** Quanti passi, quali coordinate, per quanti
- * minuti e quale app sono l'**ultima cosa scelta nelle altre schede**: qui non c'è una
- * seconda casella dove riscriverli, o sarebbero due verità sullo stesso numero e non si
- * saprebbe quale ha usato il giro. È la stessa scelta per cui in 📍 MockGps le
- * coordinate spuntate *sono* quelle che si useranno, senza un pulsante «Usa».
+ * ⚠️ **Due cose si scelgono anche qui, ma non sono copie** (v1.6.0): la casella dei
+ * passi e la lista delle posizioni. Leggono e scrivono **le stesse preferenze** delle
+ * schede 👟 e 📍 — `ultimi_passi` e `mock_lista_attiva` — quindi la verità resta una:
+ * cambiata qui, la si ritrova là, e viceversa. Il resto (secondi, minuti, spunte, app)
+ * è l'**ultima cosa scelta nelle altre schede**, come prima.
  *
  * ⚠️ **Un passo fallito non ferma gli altri**, e li fa tutt'e tre comunque: le tre cose
  * sono indipendenti — il mock non autorizzato non è una ragione per non scrivere i passi
@@ -71,6 +79,19 @@ fun RapidoScreen() {
 
     var occupato by remember { mutableStateOf(false) }
     val esiti = remember { mutableStateListOf<Esito>() }
+
+    // ⚠️ Parte dall'ultimo numero scritto davvero, come la casella della scheda 👟, e
+    // NON si salva mentre lo si digita: lo salva `PassiRepository.aggiungi()` dopo che
+    // l'inserimento è riuscito, così il default resta l'ultimo numero *usato*.
+    var quantiTesto by remember {
+        mutableStateOf(PassiRepository.ultimoNumero(ctx).takeIf { it > 0 }?.toString().orEmpty())
+    }
+
+    // La lista attiva è quella di 📍: sceglierla qui la cambia anche là.
+    val liste = remember { MockGps.leggiListe(ctx) }
+    var lista by remember { mutableStateOf(MockGps.listaAttiva(ctx)) }
+    var menuListe by remember { mutableStateOf(false) }
+    val mockAttivo by MockStato.attivo.collectAsState()
 
     // ── I tre passi ───────────────────────────────────────────────────────────
     suspend fun sequenza() {
@@ -122,11 +143,11 @@ fun RapidoScreen() {
             }
 
             // 2 ── I passi ────────────────────────────────────────────────────
-            val quanti = PassiRepository.ultimoNumero(ctx)
+            val quanti = quantiTesto.toLongOrNull() ?: 0L
             val guastoHc = PassiRepository.statoSdk(ctx)
             when {
                 quanti <= 0 -> esiti.add(
-                    Esito(false, "Passi: non c'è ancora un numero. Scrivilo una volta nella scheda 👟.")
+                    Esito(false, "Passi: scrivi quanti passi aggiungere nella casella qui sopra.")
                 )
                 guastoHc != null -> esiti.add(Esito(false, "Passi: $guastoHc"))
                 else -> when (val e = PassiRepository.aggiungi(ctx, quanti)) {
@@ -219,6 +240,50 @@ fun RapidoScreen() {
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
+        Riquadro("COSA USARE") {
+            OutlinedTextField(
+                value = quantiTesto,
+                // Come la casella della scheda 👟: solo cifre, al più sette.
+                onValueChange = { t -> quantiTesto = t.filter { it.isDigit() }.take(7) },
+                label = { Text("Passi da aggiungere") },
+                supportingText = {
+                    val n = quantiTesto.toLongOrNull() ?: 0L
+                    if (n > 0) Text("≈ ${PassiRepository.km(n * METRI_PER_PASSO)} di distanza")
+                },
+                singleLine = true,
+                enabled = !occupato,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            Text("Lista posizioni", style = MaterialTheme.typography.labelLarge)
+            Box {
+                // ⚠️ A mock acceso la lista non si cambia, come nella scheda 📍: il giro
+                // sta usando quella attiva.
+                OutlinedButton(
+                    onClick = { menuListe = true },
+                    enabled = !occupato && !mockAttivo,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                ) { Text("📍 ${lista.nome}  ▾") }
+                DropdownMenu(expanded = menuListe, onDismissRequest = { menuListe = false }) {
+                    liste.forEach { l ->
+                        DropdownMenuItem(
+                            text = { Text((if (l.id == lista.id) "✓ " else "") + l.nome) },
+                            onClick = {
+                                MockGps.scegliLista(ctx, l.id)
+                                lista = l
+                                menuListe = false
+                            },
+                        )
+                    }
+                }
+            }
+            if (mockAttivo) {
+                Text("Mentre il mock è acceso la lista non si cambia.",
+                     style = MaterialTheme.typography.bodySmall)
+            }
+        }
+
         // ⚠️ `heightIn(min = …)` e non `height`: coi caratteri di sistema grandi su
         // un'altezza fissa la scritta è più alta del pulsante, e quel che avanza sparisce.
         Button(

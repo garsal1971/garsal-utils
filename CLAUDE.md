@@ -234,11 +234,14 @@ La **prima scheda**, e quella su cui l'app si apre sempre. Un pulsantone solo, c
 nell'ordine: **1** accende la posizione finta, **2** aggiunge i passi, **3** apre l'app
 scelta. Vive in `RapidoScreen.kt`.
 
-⚠️ **Non configura niente, di proposito.** Quanti passi, quali coordinate, per quanti
-minuti e quale app sono **l'ultima cosa scelta nelle altre tre schede**: qui non c'è una
-seconda casella dove riscriverli, o sarebbero due verità sullo stesso numero e non si
-saprebbe quale ha usato il giro. È la stessa scelta per cui in 📍 MockGps le coordinate
-spuntate *sono* quelle che si useranno, senza un pulsante «Usa».
+⚠️ **Due cose si scelgono anche qui, ma non sono copie** (v1.6.0): la casella dei
+**passi** e la combo della **lista posizioni**. Leggono e scrivono **le stesse
+preferenze** delle schede 👟 e 📍 (`ultimi_passi`, `mock_lista_attiva`): cambiate qui si
+ritrovano là e viceversa, quindi la verità sullo stesso numero resta una. La casella parte
+dall'ultimo numero scritto davvero e **non si salva mentre la si digita** — la salva
+`aggiungi()` a inserimento riuscito, come in 👟. La combo è bloccata a mock acceso, come
+in 📍. Tutto il resto — secondi, minuti, spunte, app — resta **l'ultima cosa scelta
+nelle altre schede**: niente seconde caselle per quelli.
 
 ⚠️ **Un passo fallito non ferma gli altri.** Le tre cose sono indipendenti — il mock non
 autorizzato non è una ragione per non scrivere i passi — e soprattutto fermarsi al primo
@@ -290,8 +293,8 @@ la stessa ragione la casella **non si svuota** dopo l'aggiunta: azzerarla direbb
 contrario proprio nel punto in cui quel numero si è appena confermato; per ricominciare
 da capo c'è il ↺.
 
-⚠️ **La preferenza è una sola per tutta l'app**: la leggono la scheda 👟 e il pulsantone
-⚡. Due preferenze sarebbero due default diversi per la stessa domanda, col pulsantone che
+⚠️ **La preferenza è una sola per tutta l'app**: la leggono la casella della scheda 👟 e
+quella della scheda ⚡. Due preferenze sarebbero due default diversi per la stessa domanda, col pulsantone che
 scrive un numero che nella casella non si legge da nessuna parte.
 
 ### ⚠️ Health Connect e NON Google Fit, ed è tutto il punto
@@ -328,6 +331,22 @@ passaggio, e non è una cosa che il codice possa garantire.
   i dati di un'altra app. Quindi da qui i passi si **aggiungono** e si **disfa la
   propria aggiunta** — non si tolgono i passi contati dal telefono o dall'orologio. La
   schermata lo dice **prima** di premere, non dopo aver visto il totale fermo.
+
+### La distanza (v1.6.0)
+
+Ogni aggiunta scrive, **nella stessa `insertRecords`** e nella stessa finestra dei passi,
+anche un `DistanceRecord` di passi × `METRI_PER_PASSO` (0,75 m, fisso di proposito: è una
+stima, e una casella in più sarebbe un'altra cosa da sbagliare).
+
+- ⚠️ **Una chiamata sola**: `insertRecords` è tutta o niente, quindi non può restare
+  scritto uno dei due senza l'altro.
+- ⚠️ Il suo `clientRecordId` (`stepinj-dist-<finestra>`) viene dalla **stessa finestra**
+  di quello dei passi: ripremendo si sostituisce, non si somma.
+- ⚠️ **Il disfa toglie anche la distanza**: una distanza senza i suoi passi sarebbe un
+  tragitto fatto senza camminare.
+- Il permesso è **solo di scrittura** (`WRITE_DISTANCE`): la distanza non si legge da
+  nessuna parte, e cancellare le proprie righe chiede lo stesso permesso di scriverle.
+  Sta in `PERMESSI_PASSI`, quindi chi aggiorna se lo vede chiedere al primo uso.
 
 ### Altre due cose che non sono dettagli
 

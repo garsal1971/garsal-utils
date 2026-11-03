@@ -10,6 +10,8 @@
          per cui questa app esiste (vedi Passi.kt). -->
     <uses-permission android:name="android.permission.health.READ_STEPS" />
     <uses-permission android:name="android.permission.health.WRITE_STEPS" />
+    <!-- La distanza che fanno i passi aggiunti (v1.6.0): solo scrittura, non si legge. -->
+    <uses-permission android:name="android.permission.health.WRITE_DISTANCE" />
 
     <!-- ── 📍 MockGps ────────────────────────────────────────────────────────
          ⚠️ ACCESS_MOCK_LOCATION NON dà il permesso di fingere la posizione: è
