@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.health.connect.client.PermissionController
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -104,6 +105,12 @@ fun RapidoScreen() {
     var daPercorso by remember { mutableStateOf(PassiRepository.daPercorso(ctx)) }
     var minutiCammino by remember { mutableStateOf(PassiRepository.minutiCamminata(ctx).toString()) }
     var kmh by remember { mutableStateOf(PassiRepository.kmhCamminata(ctx)) }
+    // 🔋 Si rilegge al ritorno dalle impostazioni, o il riquadro direbbe il falso.
+    var batteriaOttimizzata by remember { mutableStateOf(Sveglia.ottimizzata(ctx)) }
+    LifecycleResumeEffect(Unit) {
+        batteriaOttimizzata = Sveglia.ottimizzata(ctx)
+        onPauseOrDispose { }
+    }
     val camminaAttiva by CamminataStato.attiva.collectAsState()
     val camminaPassi by CamminataStato.passi.collectAsState()
     val camminaMsg by CamminataStato.messaggio.collectAsState()
@@ -418,6 +425,34 @@ fun RapidoScreen() {
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
             )
+        }
+
+        if (batteriaOttimizzata || Sveglia.xiaomi()) {
+            Riquadro("A DISPLAY SPENTO") {
+                if (batteriaOttimizzata) {
+                    Text(
+                        "Android tiene StepInj sotto il risparmio energetico: a display spento " +
+                            "camminata e mock possono rallentare o fermarsi.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    OutlinedButton(
+                        onClick = { Sveglia.chiediEsclusione(ctx) },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                    ) { Text("🔋 Togli l'ottimizzazione batteria") }
+                }
+                if (Sveglia.xiaomi()) {
+                    Text(
+                        "Su Xiaomi serve anche: Avvio automatico acceso, Batteria «Nessuna " +
+                            "restrizione», e StepInj bloccata nelle app recenti (tieni premuta la " +
+                            "scheda → 🔒). Senza, il sistema chiude i servizi anche con la notifica.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    OutlinedButton(
+                        onClick = { Sveglia.apriScheda(ctx) },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                    ) { Text("⚙️ Apri le impostazioni di StepInj") }
+                }
+            }
         }
 
         if (esiti.isNotEmpty()) {

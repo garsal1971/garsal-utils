@@ -33,6 +33,8 @@ class MockGpsService : Service() {
 
     private var scope: CoroutineScope? = null
     private var fused: FusedLocationProviderClient? = null
+    /** 🔋 Tiene sveglio il processore a display spento (v1.10.0): la posizione va riscritta ogni secondo. */
+    private var sveglia: android.os.PowerManager.WakeLock? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -94,6 +96,8 @@ class MockGpsService : Service() {
         f?.let { MockGps.accendiFused(it) }
         fused = f
 
+        Sveglia.lascia(sveglia)
+        sveglia = Sveglia.prendi(this, "mock", durataMin * 60_000L + 10 * 60_000L)
         MockStato.punti.value = punti
         MockStato.attivo.value = true
         MockStato.messaggio.value = "In corso su ${punti.size} coordinate."
@@ -145,6 +149,8 @@ class MockGpsService : Service() {
      * posizione falsa, senza più niente a schermo che lo dica.
      */
     override fun onDestroy() {
+        Sveglia.lascia(sveglia)
+        sveglia = null
         val lm = getSystemService(Context.LOCATION_SERVICE) as? LocationManager
         if (lm != null) MockGps.spegni(lm)
         fused?.let { MockGps.spegniFused(it) }

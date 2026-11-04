@@ -54,6 +54,8 @@ class CamminataService : Service() {
     private var scope: CoroutineScope? = null
     private var giro: Job? = null
     private var chiudendo = false
+    /** 🔋 Tiene sveglio il processore a display spento (v1.10.0). */
+    private var sveglia: android.os.PowerManager.WakeLock? = null
 
     /** Metri camminati e non ancora scritti come passi. */
     private var daScrivere = 0.0
@@ -93,6 +95,8 @@ class CamminataService : Service() {
             return START_NOT_STICKY
         }
 
+        // Il tetto è la durata più dieci minuti: la chiusura e l'ultima scrittura ci stanno.
+        sveglia = Sveglia.prendi(this, "camminata", minuti * 60_000L + 10 * 60_000L)
         chiudendo = false
         daScrivere = 0.0
         metriTotali = 0.0
@@ -165,6 +169,8 @@ class CamminataService : Service() {
     }
 
     override fun onDestroy() {
+        Sveglia.lascia(sveglia)
+        sveglia = null
         scope?.cancel()
         scope = null
         CamminataStato.attiva.value = false

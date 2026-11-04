@@ -289,6 +289,13 @@ precedente ad adesso. Notifica in corso col totale e il ⏹ Ferma, riepilogo all
   nel manifest), non `health`: quello pretende i permessi dei sensori del corpo.
 - ⚠️ **Non verificato**: che Health Connect accetti le scritture con StepInj fuori dallo
   schermo. Se le rifiuta, il messaggio della camminata lo dice.
+- 🔋 **A display spento** (v1.10.0, `Sveglia.kt`): camminata e mock tengono un **wake
+  lock parziale** per la loro durata più dieci minuti di tetto, e lo lasciano in
+  `onDestroy`. ⚠️ Il servizio in primo piano da solo non basta: Android non lo chiude,
+  ma il processore dorme e i `delay` scattano al risveglio — passi a blocchi e
+  posizione finta che invecchia. In ⚡ il riquadro «A DISPLAY SPENTO» chiede di togliere
+  l'ottimizzazione batteria (riletto al ritorno, sparisce quando è fatto) e, su
+  Xiaomi/Redmi/POCO, ricorda Avvio automatico, «Nessuna restrizione» e il 🔒 nei recenti.
 - La 1.7.0 scriveva i passi a fine giro **dentro il servizio del mock**: tolto dalla
   1.8.0, `MockGpsService` è tornato quello della 1.6.0.
 
