@@ -262,6 +262,32 @@ secondo piano, e quel che venisse dopo lo farebbe un'app che non è più a scher
 ⚠️ **Un mock già in corso si lascia com'è**: fermarlo e rifarlo partire azzererebbe il
 countdown di un giro che sta lavorando, senza che nessuno l'abbia chiesto.
 
+### 👣 Passi dal percorso ad anello (v1.7.0)
+
+Un interruttore in ⚡ (preferenza `passi_da_percorso`): acceso, la casella non conta e i
+passi vengono dal **giro che il mock fa davvero**. Il pulsantone accende il mock e lo
+**arma** (`MockStato.passiDalGiro`); il servizio somma i metri di ogni tratto mentre
+cambia punto — compreso il ritorno dall'ultimo al primo, cioè l'anello — in
+`MockStato.metri`, e **a fine giro o al Ferma** scrive passi = metri ÷ 0,75 (con la loro
+distanza) in una riga che va dall'inizio del giro a quel momento. L'esito arriva in una
+notifica, perché in quel momento si è in un'altra app.
+
+- ⚠️ **È la ragione per cui esiste**: la riga della casella dura al più un minuto
+  (`aggiungi()` parte da 60 s prima), e migliaia di passi in un minuto Google Fit li
+  scarta come cadenza impossibile — in Health Connect ci sono, in Fit no. Il giro dà una
+  finestra a passo d'uomo. ⚠️ La casella manuale ha **ancora** la finestra di un minuto.
+- ⚠️ **Si contano i tratti fatti, non la stima**: la stima a schermo (anello × giri che
+  stanno nei minuti) è solo un'anticipazione. Così vale anche cambiando le coordinate a
+  giro in corso e fermando prima.
+- ⚠️ **I passi calcolati non toccano `ultimi_passi`** (`aggiungi(…, ricorda = false)`):
+  il numero di partenza della casella resta l'ultimo scritto a mano.
+- ⚠️ **Un giro nuovo parte disarmato** (lo azzera il servizio all'avvio): uno acceso
+  dalla scheda 📍 non scrive passi. Un mock **già acceso** quando si preme ⚡ si arma e
+  conta dal suo inizio.
+- ⚠️ **Se Android uccide il servizio** (`onDestroy` senza passare da `chiudi()`) i passi
+  non si scrivono: lì non c'è tempo per Health Connect.
+- Con meno di due coordinate non c'è percorso: zero metri, nessun passo, e lo dice.
+
 ### ⚠️ I permessi si chiedono TUTTI prima, e ogni risposta riprende dal passo dopo
 
 Il giro ha bisogno di tre permessi che possono mancare: posizione (serve al servizio in

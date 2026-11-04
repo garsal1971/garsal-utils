@@ -14,10 +14,13 @@ import android.os.IBinder
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.time.Instant
 
 /**
  * Il giro del mock, in un **servizio in primo piano** e non nella schermata.
@@ -32,13 +35,21 @@ import kotlinx.coroutines.launch
 class MockGpsService : Service() {
 
     private var scope: CoroutineScope? = null
+    private var giro: Job? = null
     private var fused: FusedLocationProviderClient? = null
+    /** Quando è partito il giro: l'inizio della riga dei passi dal percorso. */
+    private var inizioGiro = 0L
+    /** Una chiusura sola, anche se Ferma arriva mentre il giro sta finendo da sé. */
+    private var chiudendo = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == AZIONE_FERMA) {
-            fermaTutto()
+            // ⚠️ Non si ferma e basta: se ⚡ ha armato i passi dal percorso, i tratti
+            // già fatti vanno scritti prima di spegnere — fermare prima vuol dire
+            // averli fatti per niente.
+            chiudi()
             return START_NOT_STICKY
         }
 
@@ -95,12 +106,17 @@ class MockGpsService : Service() {
         fused = f
 
         MockStato.punti.value = punti
+        // Un giro nuovo non scrive passi finché ⚡ non lo arma, e riparte da zero metri.
+        MockStato.passiDalGiro.value = false
+        MockStato.metri.value = 0.0
+        inizioGiro = System.currentTimeMillis()
+        chiudendo = false
         MockStato.attivo.value = true
         MockStato.messaggio.value = "In corso su ${punti.size} coordinate."
 
         val s = CoroutineScope(SupervisorJob() + kotlinx.coroutines.Dispatchers.Default)
         scope = s
-        s.launch {
+        giro = s.launch {
             val fine = System.currentTimeMillis() + durataMin * 60_000L
             var i = 0
             var sulPuntoDa = 0
@@ -127,11 +143,15 @@ class MockGpsService : Service() {
                 if (sulPuntoDa >= secondiPer) {
                     sulPuntoDa = 0
                     // Si ricomincia da capo: l'elenco è un giro, non una fila.
+                    val da = elenco[i]
                     i = (i + 1) % elenco.size
+                    // 👣 Il tratto appena fatto, compreso il ritorno dall'ultimo al
+                    // primo: è l'anello che il telefono ha davvero «camminato».
+                    if (elenco.size > 1) MockStato.metri.value += MockGps.distanza(da, elenco[i])
                 }
             }
             MockStato.messaggio.value = "Finito: erano $durataMin minuti."
-            fermaTutto()
+            chiudi()
         }
 
         return START_NOT_STICKY
@@ -161,6 +181,67 @@ class MockGpsService : Service() {
     private fun fermaTutto() {
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
+    }
+
+    /**
+     * Ferma il giro, scrive i passi del percorso se ⚡ li ha armati, e solo dopo
+     * spegne il servizio: la scrittura avviene ancora in primo piano.
+     *
+     * ⚠️ Gira in uno scope suo e non in quello del giro, che viene annullato. E se
+     * Android uccide il servizio (`onDestroy` senza passare di qui) i passi non si
+     * scrivono: lì non c'è più tempo per una chiamata a Health Connect.
+     */
+    private fun chiudi() {
+        if (chiudendo) return
+        chiudendo = true
+        val g = giro
+        CoroutineScope(SupervisorJob() + kotlinx.coroutines.Dispatchers.Default).launch {
+            // Annullato e atteso: i metri si leggono quando il giro non li tocca più.
+            g?.cancelAndJoin()
+            runCatching { scriviPassi() }
+                .onFailure { avvisa("👣 Passi non scritti: ${it.message ?: it.javaClass.simpleName}") }
+            fermaTutto()
+        }
+    }
+
+    private suspend fun scriviPassi() {
+        if (!MockStato.passiDalGiro.value) return
+        MockStato.passiDalGiro.value = false
+        val metri = MockStato.metri.value
+        val passi = Math.round(metri / METRI_PER_PASSO).coerceAtMost(MAX_PASSI_PER_VOLTA)
+        if (passi <= 0) {
+            avvisa("👣 Nessun passo da scrivere: il giro non ha percorso nessun tratto.")
+            return
+        }
+        PassiRepository.statoSdk(this)?.let { avvisa("👣 Passi non scritti: $it"); return }
+        val testo = when (
+            val e = PassiRepository.aggiungi(this, passi, Instant.ofEpochMilli(inizioGiro), ricorda = false)
+        ) {
+            is EsitoPassi.Ok -> "👣 ${e.messaggio.removeSuffix(".")} dal percorso."
+            is EsitoPassi.Errore -> "👣 Passi non scritti: ${e.messaggio}"
+            EsitoPassi.PermessiRichiesti -> "👣 Passi non scritti: Health Connect non ha i permessi."
+        }
+        avvisa(testo)
+    }
+
+    /**
+     * L'esito dei passi sta in una notifica a sé, oltre che in `MockStato`: a fine
+     * giro si è in un'altra app, e un risultato che si legge solo riaprendo StepInj
+     * è un risultato che non si legge.
+     */
+    private fun avvisa(testo: String) {
+        MockStato.messaggio.value = testo
+        runCatching {
+            val nm = getSystemService(NotificationManager::class.java)
+            val n = Notification.Builder(this, CANALE)
+                .setContentTitle("StepInj")
+                .setContentText(testo)
+                .setStyle(Notification.BigTextStyle().bigText(testo))
+                .setSmallIcon(android.R.drawable.ic_menu_mylocation)
+                .setAutoCancel(true)
+                .build()
+            nm.notify(ID_ESITO, n)
+        }
     }
 
     private fun avviaInPrimoPiano(quanti: Int, minuti: Int) {
@@ -213,6 +294,7 @@ class MockGpsService : Service() {
         const val AZIONE_FERMA = "com.garsal.stepinj.FERMA_MOCK"
         private const val CANALE = "mockgps"
         private const val ID_NOTIFICA = 4242
+        private const val ID_ESITO = 4243
 
         fun avvia(ctx: Context, punti: List<Punto>, secondi: Int, minuti: Int) {
             val i = Intent(ctx, MockGpsService::class.java)
