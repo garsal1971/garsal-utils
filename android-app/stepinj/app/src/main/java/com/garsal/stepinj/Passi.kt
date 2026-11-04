@@ -6,6 +6,7 @@ import androidx.health.connect.client.aggregate.AggregationResult
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.StepsRecord
+import androidx.health.connect.client.records.metadata.Device
 import androidx.health.connect.client.records.metadata.Metadata
 import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.time.TimeRangeFilter
@@ -82,6 +83,13 @@ object PassiRepository {
     private const val DA_PERCORSO = "passi_da_percorso"
     private const val MINUTI_CAMMINATA = "camminata_minuti"
     private const val KMH_CAMMINATA = "camminata_kmh"
+
+    /**
+     * 📱 Il dispositivo scritto su ogni riga (v1.11.0): telefono Xiaomi 13T, e la riga
+     * «registrata automaticamente» invece che «inserimento manuale». ⚠️ L'**app** di
+     * origine resta StepInj: quella la mette Android dal pacchetto e non si sceglie.
+     */
+    private val DISPOSITIVO = Device(type = Device.TYPE_PHONE, manufacturer = "Xiaomi", model = "13T")
 
     /**
      * 👣 L'interruttore di ⚡: i passi non dalla casella ma dalla camminata
@@ -241,7 +249,7 @@ object PassiRepository {
                         endTime = fine,
                         startZoneOffset = zona.rules.getOffset(inizio),
                         endZoneOffset = zona.rules.getOffset(fine),
-                        metadata = Metadata.manualEntry(clientRecordId = "stepinj-$finestra"),
+                        metadata = Metadata.autoRecorded(DISPOSITIVO, clientRecordId = "stepinj-$finestra"),
                     ),
                     DistanceRecord(
                         distance = Length.meters(metri),
@@ -249,7 +257,7 @@ object PassiRepository {
                         endTime = fine,
                         startZoneOffset = zona.rules.getOffset(inizio),
                         endZoneOffset = zona.rules.getOffset(fine),
-                        metadata = Metadata.manualEntry(clientRecordId = "stepinj-dist-$finestra"),
+                        metadata = Metadata.autoRecorded(DISPOSITIVO, clientRecordId = "stepinj-dist-$finestra"),
                     ),
                 )
             )

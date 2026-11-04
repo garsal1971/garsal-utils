@@ -387,11 +387,15 @@ stima, e una casella in più sarebbe un'altra cosa da sbagliare).
 
 ### Altre due cose che non sono dettagli
 
+- 📱 **Dispositivo e modo di registrazione** (v1.11.0): ogni riga (passi e distanza,
+  casella e camminata) porta `Metadata.autoRecorded(Device(TYPE_PHONE, "Xiaomi", "13T"))`
+  invece di `manualEntry`. ⚠️ L'app di origine resta StepInj, la decide Android. Che Fit
+  tratti meglio i passi «automatici» è un'ipotesi da verificare, non un dato.
 - ⚠️ **Si legge con `aggregate` e non con `readRecords`**: sommando le righe a mano si
   conterebbero due volte i tratti che due sorgenti hanno registrato insieme (il telefono
   e l'orologio), mentre l'aggregazione applica le priorità fra sorgenti che Health
   Connect già conosce.
-- ⚠️ **`Metadata.manualEntry()` e non il costruttore `Metadata`**: dalla versione 1.1.0
+- ⚠️ **`Metadata.autoRecorded()`/`manualEntry()` e non il costruttore `Metadata`**: dalla versione 1.1.0
   della libreria quel costruttore **non esiste più**. La dipendenza è fissata a
   `1.1.0-rc01`, la stessa di garsal-apps: cambiarla senza guardare `Passi.kt` rompe la
   scrittura.
