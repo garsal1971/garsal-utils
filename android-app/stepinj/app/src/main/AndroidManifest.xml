@@ -36,6 +36,10 @@
     <!-- La notifica del servizio, da Android 13 in poi. Negata, il mock parte
          lo stesso — ma sparisce il tasto Ferma da fuori dall'app. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 🔋 v1.10.0: processore sveglio durante camminata e mock, e la richiesta di
+         escludere StepInj dal risparmio energetico. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <!-- Serve a RILEVARE Health Connect: senza, `getSdkStatus` risponde
          «non disponibile» anche dov'è installato, perché da Android 11 un'app

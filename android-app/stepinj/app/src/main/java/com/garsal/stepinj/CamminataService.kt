@@ -39,8 +39,8 @@ object CamminataStato {
  * essere; la camminata decide quanti passi si sono fatti. Si accendono insieme da ⚡,
  * ma ognuna vive nel suo servizio e fermarne una non ferma l'altra.
  *
- * ⚠️ **La velocità è fissa ([VELOCITA_MS], ~4,7 km/h)** e non segue i «secondi per
- * punto» del mock: con quelli due punti a 500 m varrebbero 670 passi in 5 secondi,
+ * ⚠️ **La velocità è quella del cursore di ⚡** (v1.9.0, 2–10 km/h, 4,7 di partenza),
+ * letta alla partenza, e non segue i «secondi per punto» del mock: con quelli due punti a 500 m varrebbero 670 passi in 5 secondi,
  * una cadenza che Google Fit scarta. È la ragione per cui la camminata esiste: le
  * righe da migliaia di passi in un minuto in Health Connect c'erano, in Fit no.
  *
@@ -54,6 +54,8 @@ class CamminataService : Service() {
     private var scope: CoroutineScope? = null
     private var giro: Job? = null
     private var chiudendo = false
+    /** 🔋 Tiene sveglio il processore a display spento (v1.10.0). */
+    private var sveglia: android.os.PowerManager.WakeLock? = null
 
     /** Metri camminati e non ancora scritti come passi. */
     private var daScrivere = 0.0
@@ -61,6 +63,8 @@ class CamminataService : Service() {
     private var metriTotali = 0.0
     private var anello = 0.0
     private var minuti = 10
+    /** Metri al secondo, dal cursore: si legge alla partenza e resta fino alla fine. */
+    private var velocita = VELOCITA_MS
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -81,6 +85,7 @@ class CamminataService : Service() {
             return START_NOT_STICKY
         }
         minuti = PassiRepository.minutiCamminata(this)
+        velocita = PassiRepository.kmhCamminata(this) / 3.6
 
         try {
             avviaInPrimoPiano()
@@ -90,6 +95,8 @@ class CamminataService : Service() {
             return START_NOT_STICKY
         }
 
+        // Il tetto è la durata più dieci minuti: la chiusura e l'ultima scrittura ci stanno.
+        sveglia = Sveglia.prendi(this, "camminata", minuti * 60_000L + 10 * 60_000L)
         chiudendo = false
         daScrivere = 0.0
         metriTotali = 0.0
@@ -108,7 +115,7 @@ class CamminataService : Service() {
                 val ora = System.currentTimeMillis()
                 // Il tempo vero trascorso e non i 5 s nominali: un telefono che dorme
                 // ritarda i giri, e i metri devono seguire l'orologio.
-                val metri = VELOCITA_MS * (minOf(ora, fine) - prima) / 1000.0
+                val metri = velocita * (minOf(ora, fine) - prima) / 1000.0
                 prima = ora
                 daScrivere += metri
                 metriTotali += metri
@@ -162,6 +169,8 @@ class CamminataService : Service() {
     }
 
     override fun onDestroy() {
+        Sveglia.lascia(sveglia)
+        sveglia = null
         scope?.cancel()
         scope = null
         CamminataStato.attiva.value = false
@@ -205,7 +214,7 @@ class CamminataService : Service() {
         nm.createNotificationChannel(
             NotificationChannel(CANALE, "Camminata", NotificationManager.IMPORTANCE_LOW)
         )
-        val n = notifica("$minuti minuti a passo d'uomo")
+        val n = notifica("$minuti minuti a ${"%.1f".format(velocita * 3.6)} km/h")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(ID_NOTIFICA, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         } else {
@@ -234,7 +243,7 @@ class CamminataService : Service() {
     }
 
     companion object {
-        /** ~4,7 km/h, ~104 passi al minuto con [METRI_PER_PASSO]. */
+        /** ~4,7 km/h, ~104 passi al minuto con [METRI_PER_PASSO]: la velocità di partenza. */
         const val VELOCITA_MS = 1.3
         const val OGNI_MS = 5_000L
         const val AZIONE_FERMA = "com.garsal.stepinj.FERMA_CAMMINATA"
@@ -242,8 +251,11 @@ class CamminataService : Service() {
         private const val ID_NOTIFICA = 4343
         private const val ID_ESITO = 4344
 
-        /** I passi che una camminata di [minuti] scriverebbe. */
-        fun stimaPassi(minuti: Int): Long = Math.round(minuti * 60 * VELOCITA_MS / METRI_PER_PASSO)
+        /** I passi che una camminata di [minuti] a [kmh] scriverebbe. */
+        fun stimaPassi(minuti: Int, kmh: Float): Long = Math.round(minuti * 60 * (kmh / 3.6) / METRI_PER_PASSO)
+
+        /** Passi al minuto a [kmh]: è la cadenza che Fit vede. */
+        fun passiAlMinuto(kmh: Float): Long = Math.round(60 * (kmh / 3.6) / METRI_PER_PASSO)
 
         fun avvia(ctx: Context) {
             ctx.startForegroundService(Intent(ctx, CamminataService::class.java))

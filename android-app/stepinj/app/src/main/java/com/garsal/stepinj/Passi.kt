@@ -81,6 +81,7 @@ object PassiRepository {
     private const val ULTIMI_PASSI = "ultimi_passi"
     private const val DA_PERCORSO = "passi_da_percorso"
     private const val MINUTI_CAMMINATA = "camminata_minuti"
+    private const val KMH_CAMMINATA = "camminata_kmh"
 
     /**
      * 👣 L'interruttore di ⚡: i passi non dalla casella ma dalla camminata
@@ -101,6 +102,23 @@ object PassiRepository {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putInt(MINUTI_CAMMINATA, minuti.coerceIn(1, 600)).apply()
     }
+
+    /**
+     * La velocità della camminata in km/h (v1.9.0), dal cursore di ⚡: fra
+     * [KMH_MIN] e [KMH_MAX], 4,7 di partenza (la velocità fissa della 1.8.0).
+     * ⚠️ Cambia solo **quanti** passi: la lunghezza del passo resta [METRI_PER_PASSO].
+     */
+    fun kmhCamminata(context: Context): Float =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getFloat(KMH_CAMMINATA, 4.7f)
+            .coerceIn(KMH_MIN, KMH_MAX)
+
+    fun salvaKmhCamminata(context: Context, kmh: Float) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putFloat(KMH_CAMMINATA, kmh.coerceIn(KMH_MIN, KMH_MAX)).apply()
+    }
+
+    const val KMH_MIN = 2f
+    const val KMH_MAX = 10f
 
     /**
      * L'ultimo numero di passi **scritto davvero**, o 0 se non è mai successo.

@@ -22,6 +22,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -41,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.health.connect.client.PermissionController
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -102,6 +104,13 @@ fun RapidoScreen() {
     var menuListe by remember { mutableStateOf(false) }
     var daPercorso by remember { mutableStateOf(PassiRepository.daPercorso(ctx)) }
     var minutiCammino by remember { mutableStateOf(PassiRepository.minutiCamminata(ctx).toString()) }
+    var kmh by remember { mutableStateOf(PassiRepository.kmhCamminata(ctx)) }
+    // 🔋 Si rilegge al ritorno dalle impostazioni, o il riquadro direbbe il falso.
+    var batteriaOttimizzata by remember { mutableStateOf(Sveglia.ottimizzata(ctx)) }
+    LifecycleResumeEffect(Unit) {
+        batteriaOttimizzata = Sveglia.ottimizzata(ctx)
+        onPauseOrDispose { }
+    }
     val camminaAttiva by CamminataStato.attiva.collectAsState()
     val camminaPassi by CamminataStato.passi.collectAsState()
     val camminaMsg by CamminataStato.messaggio.collectAsState()
@@ -171,10 +180,12 @@ fun RapidoScreen() {
                     else -> {
                         CamminataService.avvia(ctx)
                         val m = PassiRepository.minutiCamminata(ctx)
+                        val v = PassiRepository.kmhCamminata(ctx)
                         esiti.add(
                             Esito(
                                 true,
-                                "👣 Camminata partita: $m min, ≈ ${"%,d".format(CamminataService.stimaPassi(m))} " +
+                                "👣 Camminata partita: $m min a ${"%.1f".format(v)} km/h, " +
+                                    "≈ ${"%,d".format(CamminataService.stimaPassi(m, v))} " +
                                     "passi scritti ogni 5 secondi.",
                             )
                         )
@@ -316,16 +327,31 @@ fun RapidoScreen() {
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
                 )
-                // La stima: velocità fissa × minuti. L'anello dice solo quanti giri sono.
+                // ⚠️ Il cursore si legge alla partenza: a camminata in corso è bloccato,
+                // come i minuti, o il numero a schermo non sarebbe quello che sta girando.
+                Text(
+                    "Velocità: ${"%.1f".format(kmh)} km/h · ≈ ${CamminataService.passiAlMinuto(kmh)} passi al minuto",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Slider(
+                    value = kmh,
+                    onValueChange = { kmh = Math.round(it * 10) / 10f },
+                    onValueChangeFinished = { PassiRepository.salvaKmhCamminata(ctx, kmh) },
+                    valueRange = PassiRepository.KMH_MIN..PassiRepository.KMH_MAX,
+                    steps = 79,
+                    enabled = !occupato && !camminaAttiva,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                // La stima: velocità × minuti. L'anello dice solo quanti giri sono.
                 val anello = remember(lista) { MockGps.anello(MockGps.daUsare(ctx)) }
                 val m = minutiCammino.toIntOrNull()?.coerceIn(1, 600) ?: 0
-                val stima = CamminataService.stimaPassi(m)
-                val metri = m * 60 * CamminataService.VELOCITA_MS
+                val stima = CamminataService.stimaPassi(m, kmh)
+                val metri = m * 60 * (kmh / 3.6)
                 Text(
                     if (anello <= 0.0) "Con meno di due coordinate nella lista non c'è un anello da percorrere."
                     else "≈ ${"%,d".format(stima)} passi, ${PassiRepository.km(metri)}, " +
-                        "${"%.1f".format(metri / anello)} giri dell'anello (${PassiRepository.km(anello)}) " +
-                        "a passo d'uomo. Si scrivono ogni 5 secondi.",
+                        "${"%.1f".format(metri / anello)} giri dell'anello (${PassiRepository.km(anello)}). " +
+                        "Si scrivono ogni 5 secondi.",
                     style = MaterialTheme.typography.bodySmall,
                 )
                 if (camminaAttiva) {
@@ -399,6 +425,34 @@ fun RapidoScreen() {
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
             )
+        }
+
+        if (batteriaOttimizzata || Sveglia.xiaomi()) {
+            Riquadro("A DISPLAY SPENTO") {
+                if (batteriaOttimizzata) {
+                    Text(
+                        "Android tiene StepInj sotto il risparmio energetico: a display spento " +
+                            "camminata e mock possono rallentare o fermarsi.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    OutlinedButton(
+                        onClick = { Sveglia.chiediEsclusione(ctx) },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                    ) { Text("🔋 Togli l'ottimizzazione batteria") }
+                }
+                if (Sveglia.xiaomi()) {
+                    Text(
+                        "Su Xiaomi serve anche: Avvio automatico acceso, Batteria «Nessuna " +
+                            "restrizione», e StepInj bloccata nelle app recenti (tieni premuta la " +
+                            "scheda → 🔒). Senza, il sistema chiude i servizi anche con la notifica.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    OutlinedButton(
+                        onClick = { Sveglia.apriScheda(ctx) },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                    ) { Text("⚙️ Apri le impostazioni di StepInj") }
+                }
+            }
         }
 
         if (esiti.isNotEmpty()) {
