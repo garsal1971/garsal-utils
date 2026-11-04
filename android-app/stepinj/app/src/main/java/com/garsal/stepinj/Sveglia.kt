@@ -37,7 +37,7 @@ object Sveglia {
     /** StepInj è ancora sotto il risparmio energetico di Android? */
     fun ottimizzata(context: Context): Boolean = runCatching {
         val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
-        !pm.isIgnoringBatteryOptimizations(context.packageName)
+        pm.isIgnoringBatteryOptimizations(context.packageName).not()
     }.getOrDefault(false)
 
     /**
