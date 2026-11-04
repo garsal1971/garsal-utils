@@ -80,16 +80,26 @@ object PassiRepository {
     private const val ULTIMO_FINE = "ultimo_fine_passi"
     private const val ULTIMI_PASSI = "ultimi_passi"
     private const val DA_PERCORSO = "passi_da_percorso"
+    private const val MINUTI_CAMMINATA = "camminata_minuti"
 
     /**
-     * 👣 L'interruttore di ⚡ (v1.7.0): i passi non dalla casella ma dal percorso ad
-     * anello che il mock fa davvero, scritti dal servizio a fine giro.
+     * 👣 L'interruttore di ⚡: i passi non dalla casella ma dalla camminata
+     * (`CamminataService`, v1.8.0), che percorre l'anello e li scrive ogni 5 secondi.
      */
     fun daPercorso(context: Context): Boolean =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(DA_PERCORSO, false)
 
     fun salvaDaPercorso(context: Context, acceso: Boolean) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(DA_PERCORSO, acceso).apply()
+    }
+
+    /** I minuti della camminata (v1.8.0): suoi, non quelli del mock. */
+    fun minutiCamminata(context: Context): Int =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt(MINUTI_CAMMINATA, 10).coerceIn(1, 600)
+
+    fun salvaMinutiCamminata(context: Context, minuti: Int) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putInt(MINUTI_CAMMINATA, minuti.coerceIn(1, 600)).apply()
     }
 
     /**
@@ -166,8 +176,8 @@ object PassiRepository {
      * **sostituisce** la riga invece di aggiungerne una seconda. Senza, un
      * tocco ripetuto per incertezza raddoppierebbe i passi in silenzio.
      *
-     * [daQuando] (v1.7.0) è l'inizio voluto della finestra — l'inizio del giro del
-     * mock — al posto del minuto prima: 2.000 passi in un minuto sono una cadenza
+     * [daQuando] (v1.7.0) è l'inizio voluto della finestra — per la camminata la
+     * scrittura precedente — al posto del minuto prima: 2.000 passi in un minuto sono una cadenza
      * impossibile, e Google Fit una riga così la scarta. Vale comunque la regola
      * della non sovrapposizione. [ricorda] = false non tocca `ultimi_passi`: i passi
      * calcolati dal percorso non sono il numero scritto nella casella.
