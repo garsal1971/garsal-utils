@@ -79,6 +79,18 @@ object PassiRepository {
     private const val PREFS = "stepinj"
     private const val ULTIMO_FINE = "ultimo_fine_passi"
     private const val ULTIMI_PASSI = "ultimi_passi"
+    private const val DA_PERCORSO = "passi_da_percorso"
+
+    /**
+     * 👣 L'interruttore di ⚡ (v1.7.0): i passi non dalla casella ma dal percorso ad
+     * anello che il mock fa davvero, scritti dal servizio a fine giro.
+     */
+    fun daPercorso(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(DA_PERCORSO, false)
+
+    fun salvaDaPercorso(context: Context, acceso: Boolean) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(DA_PERCORSO, acceso).apply()
+    }
 
     /**
      * L'ultimo numero di passi **scritto davvero**, o 0 se non è mai successo.
@@ -153,8 +165,16 @@ object PassiRepository {
      * buon fine ma la risposta si perde per strada e si ripreme, Health Connect
      * **sostituisce** la riga invece di aggiungerne una seconda. Senza, un
      * tocco ripetuto per incertezza raddoppierebbe i passi in silenzio.
+     *
+     * [daQuando] (v1.7.0) è l'inizio voluto della finestra — l'inizio del giro del
+     * mock — al posto del minuto prima: 2.000 passi in un minuto sono una cadenza
+     * impossibile, e Google Fit una riga così la scarta. Vale comunque la regola
+     * della non sovrapposizione. [ricorda] = false non tocca `ultimi_passi`: i passi
+     * calcolati dal percorso non sono il numero scritto nella casella.
      */
-    suspend fun aggiungi(context: Context, quanti: Long): EsitoPassi = withContext(Dispatchers.IO) {
+    suspend fun aggiungi(
+        context: Context, quanti: Long, daQuando: Instant? = null, ricorda: Boolean = true,
+    ): EsitoPassi = withContext(Dispatchers.IO) {
         if (quanti <= 0) return@withContext EsitoPassi.Errore("Scrivi quanti passi aggiungere.")
         if (quanti > MAX_PASSI_PER_VOLTA) {
             return@withContext EsitoPassi.Errore(
@@ -167,7 +187,7 @@ object PassiRepository {
 
             val fine = Instant.now()
             val ultimo = prefs.getLong(ULTIMO_FINE, 0L)
-            var inizio = fine.minusSeconds(60)
+            var inizio = daQuando?.takeIf { it.isBefore(fine) } ?: fine.minusSeconds(60)
             if (ultimo > 0L) {
                 val fineVecchia = Instant.ofEpochMilli(ultimo)
                 if (fineVecchia.isAfter(inizio)) inizio = fineVecchia
@@ -207,7 +227,9 @@ object PassiRepository {
             )
             prefs.edit()
                 .putLong(ULTIMO_FINE, fine.toEpochMilli())
-                .putLong(ULTIMI_PASSI, quanti)
+                .apply {
+                    if (ricorda) putLong(ULTIMI_PASSI, quanti)
+                }
                 .apply()
             EsitoPassi.Ok("Aggiunti ${"%,d".format(quanti)} passi (${km(metri)}).")
         } catch (e: SecurityException) {

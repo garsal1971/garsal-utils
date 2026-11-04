@@ -49,6 +49,16 @@ object MockStato {
      * che azzererebbe il countdown di un giro che sta lavorando.
      */
     val punti = MutableStateFlow<List<Punto>>(emptyList())
+
+    /**
+     * 👣 Il giro in corso deve scrivere i passi del percorso quando finisce (v1.7.0).
+     * Lo arma ⚡ Vai dopo che il mock è partito; il servizio lo azzera a ogni avvio,
+     * così un giro acceso dalla scheda 📍 non scrive niente da sé.
+     */
+    val passiDalGiro = MutableStateFlow(false)
+
+    /** Metri davvero percorsi nel giro in corso, tratto per tratto. */
+    val metri = MutableStateFlow(0.0)
 }
 
 /** Una lista di coordinate con un nome. L'id non cambia rinominandola. */
@@ -262,6 +272,10 @@ object MockGps {
             Math.sin(dLon / 2).let { it * it }
         return 2 * r * Math.asin(Math.sqrt(h.coerceIn(0.0, 1.0)))
     }
+
+    /** Lunghezza dell'ANELLO: il percorso aperto più il ritorno dall'ultimo al primo. */
+    fun anello(punti: List<Punto>): Double =
+        if (punti.size < 2) 0.0 else lunghezza(punti) + distanza(punti.last(), punti.first())
 
     /** Lunghezza del percorso APERTO: dal primo all'ultimo, senza tornare indietro. */
     fun lunghezza(punti: List<Punto>): Double =

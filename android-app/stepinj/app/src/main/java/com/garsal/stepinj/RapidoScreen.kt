@@ -8,6 +8,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -21,6 +22,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -30,6 +32,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -51,6 +54,12 @@ import kotlinx.coroutines.launch
  * schede 👟 e 📍 — `ultimi_passi` e `mock_lista_attiva` — quindi la verità resta una:
  * cambiata qui, la si ritrova là, e viceversa. Il resto (secondi, minuti, spunte, app)
  * è l'**ultima cosa scelta nelle altre schede**, come prima.
+ *
+ * 👣 **Passi dal percorso** (v1.7.0): con l'interruttore acceso la casella non conta.
+ * Il pulsantone accende il mock e **arma** il giro (`MockStato.passiDalGiro`); i passi
+ * li scrive il servizio a fine giro — o al Ferma — dai metri davvero percorsi
+ * sull'anello, con la finestra di tempo del giro. Una riga di migliaia di passi in un
+ * minuto Google Fit la scarta; una di un giro a passo d'uomo no.
  *
  * ⚠️ **Un passo fallito non ferma gli altri**, e li fa tutt'e tre comunque: le tre cose
  * sono indipendenti — il mock non autorizzato non è una ragione per non scrivere i passi
@@ -91,6 +100,7 @@ fun RapidoScreen() {
     val liste = remember { MockGps.leggiListe(ctx) }
     var lista by remember { mutableStateOf(MockGps.listaAttiva(ctx)) }
     var menuListe by remember { mutableStateOf(false) }
+    var daPercorso by remember { mutableStateOf(PassiRepository.daPercorso(ctx)) }
     val mockAttivo by MockStato.attivo.collectAsState()
 
     // ── I tre passi ───────────────────────────────────────────────────────────
@@ -146,6 +156,16 @@ fun RapidoScreen() {
             val quanti = quantiTesto.toLongOrNull() ?: 0L
             val guastoHc = PassiRepository.statoSdk(ctx)
             when {
+                // 👣 Dal percorso: niente si scrive adesso, si arma il giro. Se il mock
+                // era già acceso si arma quello, contando dal suo inizio.
+                daPercorso -> if (guastoHc != null) {
+                    esiti.add(Esito(false, "Passi: $guastoHc"))
+                } else if (MockStato.attivo.value) {
+                    MockStato.passiDalGiro.value = true
+                    esiti.add(Esito(true, "👣 Passi: li scrivo a fine giro, dai metri percorsi sull'anello."))
+                } else {
+                    esiti.add(Esito(false, "👣 Passi: il mock non è acceso, quindi nessun percorso da contare."))
+                }
                 quanti <= 0 -> esiti.add(
                     Esito(false, "Passi: scrivi quanti passi aggiungere nella casella qui sopra.")
                 )
@@ -241,6 +261,34 @@ fun RapidoScreen() {
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Riquadro("COSA USARE") {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "👣 Passi dal percorso",
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.weight(1f),
+                )
+                Switch(
+                    checked = daPercorso,
+                    enabled = !occupato,
+                    onCheckedChange = { daPercorso = it; PassiRepository.salvaDaPercorso(ctx, it) },
+                )
+            }
+            if (daPercorso) {
+                // La stima: un giro è secondi × punti, e i giri sono quelli che stanno
+                // nei minuti. Il numero vero lo dà il servizio, dai tratti fatti.
+                val punti = remember(lista) { MockGps.daUsare(ctx) }
+                val t = remember(lista) { MockGps.leggiTempi(ctx) }
+                val anello = MockGps.anello(punti)
+                val giri = if (punti.isEmpty()) 0.0 else t.minuti * 60.0 / (t.secondi * punti.size)
+                val stima = Math.round(anello * giri / METRI_PER_PASSO)
+                Text(
+                    if (anello <= 0.0) "Con meno di due coordinate non c'è percorso: nessun passo."
+                    else "≈ ${"%,d".format(stima)} passi: anello ${PassiRepository.km(anello)} × " +
+                        "${"%.1f".format(giri)} giri in ${t.minuti} min. Si scrivono a fine giro " +
+                        "(o al Ferma, coi soli tratti fatti).",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
             OutlinedTextField(
                 value = quantiTesto,
                 // Come la casella della scheda 👟: solo cifre, al più sette.
@@ -251,7 +299,7 @@ fun RapidoScreen() {
                     if (n > 0) Text("≈ ${PassiRepository.km(n * METRI_PER_PASSO)} di distanza")
                 },
                 singleLine = true,
-                enabled = !occupato,
+                enabled = !occupato && !daPercorso,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth(),
             )
