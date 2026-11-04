@@ -49,16 +49,6 @@ object MockStato {
      * che azzererebbe il countdown di un giro che sta lavorando.
      */
     val punti = MutableStateFlow<List<Punto>>(emptyList())
-
-    /**
-     * 👣 Il giro in corso deve scrivere i passi del percorso quando finisce (v1.7.0).
-     * Lo arma ⚡ Vai dopo che il mock è partito; il servizio lo azzera a ogni avvio,
-     * così un giro acceso dalla scheda 📍 non scrive niente da sé.
-     */
-    val passiDalGiro = MutableStateFlow(false)
-
-    /** Metri davvero percorsi nel giro in corso, tratto per tratto. */
-    val metri = MutableStateFlow(0.0)
 }
 
 /** Una lista di coordinate con un nome. L'id non cambia rinominandola. */

@@ -55,11 +55,11 @@ import kotlinx.coroutines.launch
  * cambiata qui, la si ritrova là, e viceversa. Il resto (secondi, minuti, spunte, app)
  * è l'**ultima cosa scelta nelle altre schede**, come prima.
  *
- * 👣 **Passi dal percorso** (v1.7.0): con l'interruttore acceso la casella non conta.
- * Il pulsantone accende il mock e **arma** il giro (`MockStato.passiDalGiro`); i passi
- * li scrive il servizio a fine giro — o al Ferma — dai metri davvero percorsi
- * sull'anello, con la finestra di tempo del giro. Una riga di migliaia di passi in un
- * minuto Google Fit la scarta; una di un giro a passo d'uomo no.
+ * 👣 **Passi dal percorso** (v1.8.0): con l'interruttore acceso la casella non conta.
+ * Il pulsantone accende il mock **e** la camminata (`CamminataService`), ognuno per
+ * conto suo: la camminata percorre l'anello a passo d'uomo e scrive ogni 5 secondi.
+ * C'è anche ▶ Cammina / ⏹ Ferma per lei sola. Una riga di migliaia di passi in un
+ * minuto Google Fit la scarta; tante righe a cadenza umana no.
  *
  * ⚠️ **Un passo fallito non ferma gli altri**, e li fa tutt'e tre comunque: le tre cose
  * sono indipendenti — il mock non autorizzato non è una ragione per non scrivere i passi
@@ -101,6 +101,10 @@ fun RapidoScreen() {
     var lista by remember { mutableStateOf(MockGps.listaAttiva(ctx)) }
     var menuListe by remember { mutableStateOf(false) }
     var daPercorso by remember { mutableStateOf(PassiRepository.daPercorso(ctx)) }
+    var minutiCammino by remember { mutableStateOf(PassiRepository.minutiCamminata(ctx).toString()) }
+    val camminaAttiva by CamminataStato.attiva.collectAsState()
+    val camminaPassi by CamminataStato.passi.collectAsState()
+    val camminaMsg by CamminataStato.messaggio.collectAsState()
     val mockAttivo by MockStato.attivo.collectAsState()
 
     // ── I tre passi ───────────────────────────────────────────────────────────
@@ -156,15 +160,25 @@ fun RapidoScreen() {
             val quanti = quantiTesto.toLongOrNull() ?: 0L
             val guastoHc = PassiRepository.statoSdk(ctx)
             when {
-                // 👣 Dal percorso: niente si scrive adesso, si arma il giro. Se il mock
-                // era già acceso si arma quello, contando dal suo inizio.
-                daPercorso -> if (guastoHc != null) {
-                    esiti.add(Esito(false, "Passi: $guastoHc"))
-                } else if (MockStato.attivo.value) {
-                    MockStato.passiDalGiro.value = true
-                    esiti.add(Esito(true, "👣 Passi: li scrivo a fine giro, dai metri percorsi sull'anello."))
-                } else {
-                    esiti.add(Esito(false, "👣 Passi: il mock non è acceso, quindi nessun percorso da contare."))
+                // 👣 Dal percorso: parte la camminata, indipendente dal mock. Una già in
+                // corso si lascia com'è, come il mock.
+                daPercorso -> when {
+                    guastoHc != null -> esiti.add(Esito(false, "Passi: $guastoHc"))
+                    CamminataStato.attiva.value -> esiti.add(Esito(true, "👣 Camminata: era già in corso, lasciata com'è."))
+                    MockGps.anello(MockGps.daUsare(ctx)) <= 0.0 -> esiti.add(
+                        Esito(false, "👣 Camminata: servono almeno due coordinate nella lista.")
+                    )
+                    else -> {
+                        CamminataService.avvia(ctx)
+                        val m = PassiRepository.minutiCamminata(ctx)
+                        esiti.add(
+                            Esito(
+                                true,
+                                "👣 Camminata partita: $m min, ≈ ${"%,d".format(CamminataService.stimaPassi(m))} " +
+                                    "passi scritti ogni 5 secondi.",
+                            )
+                        )
+                    }
                 }
                 quanti <= 0 -> esiti.add(
                     Esito(false, "Passi: scrivi quanti passi aggiungere nella casella qui sopra.")
@@ -233,6 +247,21 @@ fun RapidoScreen() {
         ActivityResultContracts.RequestMultiplePermissions()
     ) { scope.launch { passoPassi() } }
 
+    // ▶ Cammina, da solo: prima i permessi di Health Connect (la camminata scrive), poi
+    // parte. Un launcher suo, perché quello del pulsantone riprende la sequenza intera.
+    val chiediPassiCammina = rememberLauncherForActivityResult(
+        contract = PermissionController.createRequestPermissionResultContract(),
+    ) { concessi -> if (concessi.containsAll(PERMESSI_PASSI)) CamminataService.avvia(ctx) }
+
+    fun cammina() {
+        val guasto = PassiRepository.statoSdk(ctx)
+        if (guasto != null) { CamminataStato.messaggio.value = guasto; return }
+        scope.launch {
+            if (PassiRepository.permessiConcessi(ctx)) CamminataService.avvia(ctx)
+            else chiediPassiCammina.launch(PERMESSI_PASSI)
+        }
+    }
+
     fun vai() {
         occupato = true
         esiti.clear()
@@ -274,20 +303,46 @@ fun RapidoScreen() {
                 )
             }
             if (daPercorso) {
-                // La stima: un giro è secondi × punti, e i giri sono quelli che stanno
-                // nei minuti. Il numero vero lo dà il servizio, dai tratti fatti.
-                val punti = remember(lista) { MockGps.daUsare(ctx) }
-                val t = remember(lista) { MockGps.leggiTempi(ctx) }
-                val anello = MockGps.anello(punti)
-                val giri = if (punti.isEmpty()) 0.0 else t.minuti * 60.0 / (t.secondi * punti.size)
-                val stima = Math.round(anello * giri / METRI_PER_PASSO)
+                OutlinedTextField(
+                    value = minutiCammino,
+                    onValueChange = { t ->
+                        minutiCammino = t.filter { it.isDigit() }.take(3)
+                        minutiCammino.toIntOrNull()?.takeIf { it > 0 }
+                            ?.let { PassiRepository.salvaMinutiCamminata(ctx, it) }
+                    },
+                    label = { Text("Minuti di camminata") },
+                    singleLine = true,
+                    enabled = !occupato && !camminaAttiva,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                // La stima: velocità fissa × minuti. L'anello dice solo quanti giri sono.
+                val anello = remember(lista) { MockGps.anello(MockGps.daUsare(ctx)) }
+                val m = minutiCammino.toIntOrNull()?.coerceIn(1, 600) ?: 0
+                val stima = CamminataService.stimaPassi(m)
+                val metri = m * 60 * CamminataService.VELOCITA_MS
                 Text(
-                    if (anello <= 0.0) "Con meno di due coordinate non c'è percorso: nessun passo."
-                    else "≈ ${"%,d".format(stima)} passi: anello ${PassiRepository.km(anello)} × " +
-                        "${"%.1f".format(giri)} giri in ${t.minuti} min. Si scrivono a fine giro " +
-                        "(o al Ferma, coi soli tratti fatti).",
+                    if (anello <= 0.0) "Con meno di due coordinate nella lista non c'è un anello da percorrere."
+                    else "≈ ${"%,d".format(stima)} passi, ${PassiRepository.km(metri)}, " +
+                        "${"%.1f".format(metri / anello)} giri dell'anello (${PassiRepository.km(anello)}) " +
+                        "a passo d'uomo. Si scrivono ogni 5 secondi.",
                     style = MaterialTheme.typography.bodySmall,
                 )
+                if (camminaAttiva) {
+                    Text(
+                        "👣 In corso: ${"%,d".format(camminaPassi)} passi scritti.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                } else if (camminaMsg.isNotBlank()) {
+                    Text(camminaMsg, style = MaterialTheme.typography.bodySmall)
+                }
+                OutlinedButton(
+                    onClick = {
+                        if (camminaAttiva) CamminataService.ferma(ctx) else cammina()
+                    },
+                    enabled = !occupato && (camminaAttiva || anello > 0.0),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                ) { Text(if (camminaAttiva) "⏹ Ferma la camminata" else "▶ Cammina") }
             }
             OutlinedTextField(
                 value = quantiTesto,

@@ -29,6 +29,10 @@
          un'ALTRA app, quindi la schermata è per definizione in secondo piano. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <!-- 👣 La camminata (v1.8.0): un servizio in primo piano «uso speciale», che non
+         chiede permessi a runtime. Non è `health`: quel tipo pretende anche i permessi
+         dei sensori del corpo, che a una camminata simulata non servono. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <!-- La notifica del servizio, da Android 13 in poi. Negata, il mock parte
          lo stesso — ma sparisce il tasto Ferma da fuori dall'app. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -101,6 +105,15 @@
             android:name=".MockGpsService"
             android:exported="false"
             android:foregroundServiceType="location" />
+
+        <service
+            android:name=".CamminataService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Scrive in Health Connect, ogni pochi secondi, i passi di una camminata simulata su un percorso scelto dall'utente." />
+        </service>
 
         <!-- Health Connect pretende un indirizzo per l'informativa privacy. -->
         <meta-data
